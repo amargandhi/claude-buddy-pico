@@ -1,0 +1,18 @@
+.DS_Store
+.idea/
+.vscode/
+Claude Pico Desktop Buddy Project Images/
+build/
+cmake-build-*/
+compile_commands.json
+*.bin
+*.elf
+*.hex
+*.map
+*.uf2
+tmp_ui_issue.png
+tools/
+third_party/*
+!third_party/README.md
+toolchains/*
+!toolchains/README.md
