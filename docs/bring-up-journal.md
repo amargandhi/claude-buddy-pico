@@ -192,6 +192,10 @@ Button mapping stayed aligned with the earlier design:
 - `Y`: home
 - `Hold A`: settings
 
+### What actually shipped
+
+The firmware that landed in `claude_buddy_pico` simplified the screen set away from five top-level screens. The shipped layout is `Home`, `Pet`, and `Info` as the main screens, with `Prompt` handled as a centered overlay on top of whichever main screen is active, and `Settings` and `Reset` reached through a menu overlay opened with `Hold A`. The button semantics above stayed close to the plan, with some Pico-specific additions such as `Hold X` for the `dizzy` easter egg and `Hold Y` for nap. The canonical on-device UI reference is [user-guide.md](user-guide.md), not this section.
+
 ## Recovery and Troubleshooting Notes Worth Publishing
 
 These are the highest-value troubleshooting items to keep in the eventual public write-up:

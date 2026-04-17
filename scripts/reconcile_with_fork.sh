@@ -26,6 +26,10 @@ rsync -a --delete \
   --exclude "third_party/" \
   --exclude "toolchains/" \
   --exclude ".DS_Store" \
+  --exclude "**/.DS_Store" \
+  --exclude "Claude Pico Desktop Buddy Project Images/" \
+  --exclude "tmp_ui_issue.png" \
+  --exclude "*.tmp" \
   "$source_root/" "$target_dir/"
 
 echo "synced working tree into: $target_dir"

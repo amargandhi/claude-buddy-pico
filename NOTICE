@@ -1,0 +1,30 @@
+Claude Desktop Buddy Pico
+=========================
+
+This project is a community fork of:
+
+  Claude Desktop Buddy
+  https://github.com/anthropics/claude-desktop-buddy
+  Copyright (c) 2026 Anthropic, PBC
+  Licensed under the MIT License.
+
+The upstream repository provides the reference Hardware Buddy BLE protocol
+and the original M5Stick-based firmware on which the buddy interaction model
+in this fork is based. The port retargets that work onto the Raspberry Pi
+Pico 2 W with a Pimoroni Pico Display Pack 2.8 and a LiPo SHIM.
+
+This fork is an unofficial community build. It is not produced, endorsed,
+or supported by Anthropic.
+
+Third-Party References
+----------------------
+
+- Raspberry Pi Pico SDK is distributed under its own license terms. See the
+  upstream repository at https://github.com/raspberrypi/pico-sdk.
+- BTstack is distributed under its own license terms. See the upstream
+  repository at https://github.com/bluekitchen/btstack.
+- Pimoroni Pico libraries are distributed under their own license terms. See
+  the upstream repository at https://github.com/pimoroni/pimoroni-pico.
+
+None of the above vendor sources are redistributed within this repository.
+They are cloned into `third_party/` at build time by `scripts/clone_deps.sh`.

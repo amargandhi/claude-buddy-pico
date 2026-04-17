@@ -1,3 +1,21 @@
+// claude_buddy_pico.cpp
+//
+// Pico Buddy main firmware. This file is intentionally a single translation
+// unit for v1.
+//
+// Why: bring-up required rapid iteration across BLE, persistence, UI state,
+// and input handling at the same time, with real hardware as the only way to
+// verify behavior. A premature split would have meant breaking working code
+// that could not easily be re-verified in bulk. The tradeoff was landing
+// working firmware faster at the cost of a large file.
+//
+// V2 plans to split this along BLE, UI, state, buddy, and persistence
+// boundaries once the protocol surface stops moving. Until then, navigate
+// this file by section: constants, state, storage helpers, BLE event
+// handlers, UI rendering, main loop.
+//
+// See docs/project-plan.md for the overall v1/v2 structure.
+
 #include <algorithm>
 #include <cinttypes>
 #include <ctime>

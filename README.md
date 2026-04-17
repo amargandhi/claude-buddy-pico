@@ -93,7 +93,7 @@ For day-to-day use of the finished firmware, see [docs/user-guide.md](docs/user-
 
 - `Hold A` opens the on-device menu and settings overlay.
 - The `Name` field in Claude Desktop Hardware Buddy changes the large device name shown on the Pico.
-- The smaller owner line comes from the Buddy `owner` value sent by Claude Desktop or the bridge. Other builders will see their own name there, not `Amar`.
+- The smaller owner line comes from the Buddy `owner` value sent by Claude Desktop or the bridge, so each builder's own name appears there.
 - LED meanings:
   - `off`: asleep or not linked
   - `green`: linked and idle
@@ -150,6 +150,8 @@ cp build/pico/claude_buddy_pico.uf2 /Volumes/RP2350/
 4. Select `Claude Pico`
 5. Complete the passkey flow if prompted
 
+If the `Open Hardware Buddy...` menu item is missing on your Claude Desktop build, the feature may still be present in the installed app but hidden by runtime feature gating on that machine. In that case the problem is host-side, not firmware-side. The background and the recovery path that worked here are in [docs/bring-up-journal.md](docs/bring-up-journal.md).
+
 Once paired, the Buddy window should show live status fields from the Pico and the device should react to heartbeat snapshots and approval requests.
 
 ## Character Packs
@@ -180,8 +182,10 @@ For a first folder-push test, use [examples/character-packs/sunset_blob](example
 - [docs/limitations.md](docs/limitations.md)
 - [docs/bring-up-journal.md](docs/bring-up-journal.md)
 
-## Status
+## Credits
 
-This workspace contains the finished Pico-side implementation and docs, but it is not yet connected to the public `-pico` GitHub fork from this machine because the local `gh` authentication token is currently invalid. The intended public repo shape is still a real fork of Anthropic's upstream project, not a standalone unrelated repo.
+The Hardware Buddy BLE protocol and the original M5Stick reference firmware are the work of Anthropic and are published at [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). This repo is an unofficial community port and is not produced, endorsed, or supported by Anthropic. See [NOTICE](NOTICE) for attribution details and [LICENSE](LICENSE) for license terms.
 
-When GitHub auth is fixed, use `scripts/reconcile_with_fork.sh <fork-url>` to sync this workspace into the real fork clone while preserving `origin` and `upstream` remotes.
+## License
+
+Released under the MIT License. See [LICENSE](LICENSE).
