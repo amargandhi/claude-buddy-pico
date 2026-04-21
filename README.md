@@ -5,7 +5,7 @@ A BLE desktop buddy for [Claude Desktop](https://claude.ai/download), ported fro
 ![Claude Buddy Pico assembled and linked to Claude Desktop](Physical%20Build/Photos_web/03_assembly/03_20_assembled_claude_linked.jpg)
 
 <p align="center">
-  <img src="Physical%20Build/Photos_web/03_assembly/03_19_assembled_powered_on_pet_screen.jpg" alt="Claude Buddy Pico powered on in the printed case" width="49%">
+  <img src="docs/assets/readme-gallery-left.jpg" alt="Claude Buddy Pico showing an approval prompt on a Mac mini" width="49%">
   &nbsp;
   <img src="docs/assets/buddy_demo.gif" alt="Claude Buddy Pico reacting to Claude Desktop activity" width="49%">
 </p>
@@ -17,7 +17,7 @@ Upstream: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude
 - Raspberry Pi Pico 2 W + Pimoroni Display Pack 2.8 + optional LiPo SHIM and 2000 mAh battery.
 - Pairs with Claude Desktop over Bluetooth Low Energy using the Hardware Buddy protocol.
 - Runs tethered on USB, or untethered with the optional battery.
-- 3D-printed case in the shape of Clawd. CAD in both `.step` (editable) and `.stl` (printable).
+- 3D-printed case in the shape of the Claude Code mascot. CAD in both `.step` (editable) and `.stl` (printable).
 - MIT licensed; improvements and fixes are welcome.
 
 ## Pick a path

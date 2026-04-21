@@ -1,6 +1,6 @@
 # Claude Pico Desktop Buddy — Build Guide
 
-A small BLE buddy for [Claude Desktop](https://claude.ai/download). Raspberry Pi Pico 2 W, Pimoroni Display Pack 2.8, optional battery, 3D-printed case in the shape of Clawd. Pairs over Bluetooth Low Energy using Anthropic's Hardware Buddy protocol.
+A small BLE buddy for [Claude Desktop](https://claude.ai/download). Raspberry Pi Pico 2 W, Pimoroni Display Pack 2.8, optional battery, 3D-printed case in the shape of the Claude Code mascot. Pairs over Bluetooth Low Energy using Anthropic's Hardware Buddy protocol.
 
 ![Assembled Claude Pico Buddy](Photos_web/03_assembly/03_19_assembled_powered_on_pet_screen.jpg)
 
@@ -54,7 +54,7 @@ Six parts. Both `.stl` (slice-ready) and `.step` (parametric — open in Fusion 
 | File stem | Qty | What it is |
 |-----------|----:|------------|
 | `Claude_Pico_Case_Main_Body` | 1 | Front shell. Screen window, side button slots, power-button pocket. |
-| `Claude_Pico_Case_Rear_With_Tail` | 1 | Rear panel with the Clawd tail. |
+| `Claude_Pico_Case_Rear_With_Tail` | 1 | Rear panel with the Claude Code mascot tail. |
 | `Claude_Pico_Battery_Clip` | 1 | Holds the battery against the inside of the rear panel. Glued. |
 | `Claude_Pico_Power_Button` | 1 | Actuator for the LiPo SHIM's power button. |
 | `Claude_Pico_Left_Side_Button` | 1 | Actuator for the display's `A` / `B` column. |
@@ -263,5 +263,5 @@ The BLE smoke test should show `ADVERTISING` and a name field of `Claude Pico`.
 
 - Upstream BLE Hardware Buddy protocol: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). The original project is Felix Rieseberg's.
 - Pico firmware port, case design, build notes: this repo.
-- Mascot: Clawd, Anthropic.
+- Mascot: Claude Code mascot (Anthropic).
 - Licence: see [../LICENSE](../LICENSE).
