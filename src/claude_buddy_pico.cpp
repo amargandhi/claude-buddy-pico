@@ -127,6 +127,20 @@ enum class FaceRenderStyle : uint8_t {
   Mascot = 2,
 };
 
+enum class PromptResultState : uint8_t {
+  None = 0,
+  Approved = 1,
+  Denied = 2,
+  TimedOut = 3,
+};
+
+enum class PromptResultSpeed : uint8_t {
+  None = 0,
+  Quick = 1,
+  Normal = 2,
+  Slow = 3,
+};
+
 enum class PowerEventState : uint8_t {
   None = 0,
   UsbPlug = 1,
@@ -356,6 +370,8 @@ struct BuddyState {
   uint32_t tokens_today = 0;
   uint32_t level = 0;
   uint32_t prompt_arrived_ms = 0;
+  uint32_t prompt_result_started_ms = 0;
+  uint32_t prompt_result_until_ms = 0;
   uint32_t one_shot_until_ms = 0;
   uint32_t reset_confirm_until = 0;
   uint32_t last_bridge_tokens = 0;
@@ -375,6 +391,8 @@ struct BuddyState {
   uint32_t token_rate_window_start_tokens_today = 0;
   uint16_t token_rate_per_min = 0;
   uint16_t power_event_seq = 0;
+  uint8_t prompt_result = 0;
+  uint8_t prompt_result_band = 0;
   PowerEventState power_event = PowerEventState::None;
 
   absolute_time_t connected_since = nil_time;
@@ -1022,12 +1040,34 @@ bool desktop_active() {
 }
 
 void clear_prompt() {
+  if(state.prompt_active && !state.response_sent && state.prompt_id[0] != '\0') {
+    state.prompt_result = static_cast<uint8_t>(PromptResultState::TimedOut);
+    state.prompt_result_band = static_cast<uint8_t>(PromptResultSpeed::None);
+    state.prompt_result_started_ms = now_ms();
+    state.prompt_result_until_ms = state.prompt_result_started_ms + 1400u;
+  }
   state.prompt_active = false;
   state.response_sent = false;
   state.prompt_details = false;
   state.prompt_id[0] = '\0';
   state.prompt_tool[0] = '\0';
   state.prompt_hint[0] = '\0';
+}
+
+void reset_prompt_result() {
+  state.prompt_result = static_cast<uint8_t>(PromptResultState::None);
+  state.prompt_result_band = static_cast<uint8_t>(PromptResultSpeed::None);
+  state.prompt_result_started_ms = 0;
+  state.prompt_result_until_ms = 0;
+}
+
+void set_prompt_result(const PromptResultState result, const PromptResultSpeed band,
+                       const uint32_t duration_ms) {
+  const uint32_t now = now_ms();
+  state.prompt_result = static_cast<uint8_t>(result);
+  state.prompt_result_band = static_cast<uint8_t>(band);
+  state.prompt_result_started_ms = now;
+  state.prompt_result_until_ms = now + duration_ms;
 }
 
 uint16_t read_vsys_mv() {
@@ -1303,6 +1343,9 @@ PersonaState derive_state() {
   }
   if(!desktop_active()) {
     return P_SLEEP;
+  }
+  if(state.prompt_active && !state.response_sent) {
+    return P_ATTENTION;
   }
   if(state.waiting > 0 && !state.response_sent) {
     return P_ATTENTION;
@@ -1944,6 +1987,7 @@ void handle_protocol_line(const char* line) {
     extract_string_after(line, "\"prompt\"", "tool", state.prompt_tool, sizeof(state.prompt_tool));
     extract_string_after(line, "\"prompt\"", "hint", state.prompt_hint, sizeof(state.prompt_hint));
     if(std::strcmp(previous_prompt, state.prompt_id) != 0) {
+      reset_prompt_result();
       state.response_sent = false;
       state.prompt_arrived_ms = now_ms();
       state.prompt_details = false;
@@ -1972,12 +2016,20 @@ void handle_prompt_decision(const char* decision) {
     stats_on_approval(took_seconds);
     set_ack("Sent approval");
     if(took_seconds < 5) {
-      trigger_one_shot(P_HEART, 2000);
+      set_prompt_result(PromptResultState::Approved, PromptResultSpeed::Quick, 2400u);
+      trigger_one_shot(P_HEART, 2200);
+    } else if(took_seconds <= 20) {
+      set_prompt_result(PromptResultState::Approved, PromptResultSpeed::Normal, 2200u);
+      trigger_one_shot(P_CELEBRATE, 2200);
+    } else {
+      set_prompt_result(PromptResultState::Approved, PromptResultSpeed::Slow, 2200u);
+      trigger_one_shot(P_CELEBRATE, 2200);
     }
   } else {
     stats_on_denial();
     set_ack("Sent denial");
-    trigger_one_shot(P_DIZZY, 1500);
+    set_prompt_result(PromptResultState::Denied, PromptResultSpeed::None, 1800u);
+    trigger_one_shot(P_DIZZY, 1600);
   }
   update_snapshot_banner();
 }
@@ -3364,6 +3416,12 @@ void populate_v2_inputs(ui_v2::BuddyInputs& in, uint32_t now) {
   copy_string(in.prompt_tool, sizeof(in.prompt_tool), state.prompt_tool);
   copy_string(in.prompt_hint, sizeof(in.prompt_hint), state.prompt_hint);
   in.prompt_arrived_ms = state.prompt_arrived_ms;
+  in.prompt_result = static_cast<ui_v2::PromptResult>(
+      std::min<uint8_t>(state.prompt_result, 3));
+  in.prompt_result_band = static_cast<ui_v2::PromptResultBand>(
+      std::min<uint8_t>(state.prompt_result_band, 3));
+  in.prompt_result_started_ms = state.prompt_result_started_ms;
+  in.prompt_result_until_ms = state.prompt_result_until_ms;
 
   // Persona & persisted counters. V1's PersonaState and V2's mirror enum
   // share numeric order (see ui_state.h), so the cast is load-bearing.

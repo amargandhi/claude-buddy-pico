@@ -3,6 +3,7 @@
 
 #include <cstdio>
 
+#include "../acting.h"
 #include "../chrome.h"
 #include "../companion.h"
 #include "../geometry.h"
@@ -36,7 +37,7 @@ uint32_t approval_streak(const BuddyInputs& in) {
   return streak;
 }
 
-const char* mood_name(const BuddyInputs& in, uint32_t streak) {
+const char* base_mood_name(const BuddyInputs& in, uint32_t streak) {
   if(in.pet_energy_pct <= 20) return "sleepy";
   if(in.pet_fed_pct <= 25) return "hungry";
   if(streak >= 8 && in.pet_fed_pct >= 65 && in.pet_energy_pct >= 55) return "proud";
@@ -45,7 +46,7 @@ const char* mood_name(const BuddyInputs& in, uint32_t streak) {
   return "calm";
 }
 
-Rgb24 mood_color(const BuddyInputs& in, uint32_t streak) {
+Rgb24 base_mood_color(const BuddyInputs& in, uint32_t streak) {
   if(in.pet_energy_pct <= 20) return kTextDim;
   if(in.pet_fed_pct <= 25) return kWarnAmber;
   if(streak >= 8 && in.pet_fed_pct >= 65 && in.pet_energy_pct >= 55) return kAccentClay;
@@ -65,6 +66,59 @@ PersonaState mood_persona(const BuddyInputs& in, uint32_t streak, uint32_t now_m
   if(in.pet_energy_pct >= 75 && in.pet_fed_pct >= 70) return PersonaState::Celebrate;
   if(in.pet_energy_pct >= 55) return PersonaState::Busy;
   return PersonaState::Idle;
+}
+
+const char* display_mood_name(const BuddyInputs& in, uint32_t streak, uint32_t now_ms) {
+  if(acting::approval_pending(in)) {
+    switch(acting::approval_wait_band(in, now_ms)) {
+      case acting::ApprovalWaitBand::PromptNew:       return "approval";
+      case acting::ApprovalWaitBand::PromptWaiting:   return "waiting";
+      case acting::ApprovalWaitBand::PromptOverdue:   return "overdue";
+      case acting::ApprovalWaitBand::PromptEscalated: return "urgent";
+      case acting::ApprovalWaitBand::None:            return "approval";
+    }
+  }
+  if(acting::prompt_result_active(in, now_ms)) {
+    switch(in.prompt_result) {
+      case PromptResult::Approved:
+        if(in.prompt_result_band == PromptResultBand::Quick) return "loved";
+        if(in.prompt_result_band == PromptResultBand::Normal) return "relief";
+        return "earned";
+      case PromptResult::Denied:
+        return "denied";
+      case PromptResult::TimedOut:
+        return base_mood_name(in, streak);
+      case PromptResult::None:
+        break;
+    }
+  }
+  return base_mood_name(in, streak);
+}
+
+Rgb24 display_mood_color(const BuddyInputs& in, uint32_t streak, uint32_t now_ms) {
+  if(acting::approval_pending(in)) return acting::prompt_accent(in);
+  if(acting::prompt_result_active(in, now_ms)) {
+    switch(in.prompt_result) {
+      case PromptResult::Approved:
+        return (in.prompt_result_band == PromptResultBand::Quick)
+            ? kAccentClay : kOkGreen;
+      case PromptResult::Denied:
+        return kDangerRed;
+      case PromptResult::TimedOut:
+        return base_mood_color(in, streak);
+      case PromptResult::None:
+        break;
+    }
+  }
+  return base_mood_color(in, streak);
+}
+
+PersonaState display_persona(const BuddyInputs& in, uint32_t streak, uint32_t now_ms) {
+  PersonaState override_persona = PersonaState::Idle;
+  if(acting::pet_persona_override(in, now_ms, override_persona)) {
+    return override_persona;
+  }
+  return mood_persona(in, streak, now_ms);
 }
 
 void format_age(char* out, size_t out_sz, uint32_t age_minutes) {
@@ -95,12 +149,12 @@ void tick(const BuddyInputs& in, BuddyOutputs& /*out*/, FaceState& face,
   gfx::clear(kBgInk);
 
   const uint32_t streak = approval_streak(in);
-  const Rgb24 accent = mood_color(in, streak);
-  const PersonaState persona = mood_persona(in, streak, now_ms);
+  const Rgb24 accent = display_mood_color(in, streak, now_ms);
+  const PersonaState persona = display_persona(in, streak, now_ms);
 
   char species[32];
   companion::label_current(species, sizeof(species));
-  const char* mood = mood_name(in, streak);
+  const char* mood = display_mood_name(in, streak, now_ms);
   const int mood_w = gfx::text_width(mood, 1.0f);
   char species_fit[32];
   gfx::fit_text(species_fit, sizeof(species_fit), species, 304 - mood_w - 18, 1.4f);
