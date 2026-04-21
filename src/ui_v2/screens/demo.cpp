@@ -6,6 +6,7 @@
 // ships, not a parallel look-alike.
 #include "demo.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -43,10 +44,10 @@ constexpr SceneInfo kScenes[kSceneCount] = {
     {"Home idle",        4000},
     {"Home busy",        4000},
     {"Home alert",       3000},
-    {"Approval SAFE",    4000},
-    {"Approval OK",      4000},
-    {"Approval CAUTION", 4000},
-    {"Approval DANGER",  5000},
+    {"Approval ask",     2600},
+    {"Approval yes",     2800},
+    {"Approval ask 2",   2200},
+    {"Approval no",      2500},
     {"Buddy auto",       4000},
     {"Buddy auto",       4000},
     {"Buddy auto",       4000},
@@ -65,6 +66,7 @@ struct State {
   uint8_t  scene    = 0;
   bool     paused   = false;
   uint32_t scene_start_ms = 0;
+  bool     scene_action_fired = false;
   uint32_t enter_ms = 0;
   transitions::MergeWipe enter_wipe;
   transitions::MergeWipe exit_wipe;
@@ -72,11 +74,24 @@ struct State {
 };
 State g_st;
 
+bool is_approval_story_scene(uint8_t scene) {
+  return scene >= 5 && scene <= 8;
+}
+
+void enter_scene(uint8_t scene, uint32_t now_ms) {
+  g_st.scene = scene;
+  g_st.scene_start_ms = now_ms;
+  g_st.scene_action_fired = false;
+  if(is_approval_story_scene(scene)) {
+    approval::vtable()->enter(now_ms);
+  }
+}
+
 void enter(uint32_t now_ms) {
   g_st = State{};
   g_st.enter_ms = now_ms;
-  g_st.scene_start_ms = now_ms;
   g_st.enter_wipe.start(now_ms, 1000);
+  enter_scene(0, now_ms);
 }
 
 // Build a synthetic BuddyInputs for scene rendering. Most of the scenes
@@ -87,6 +102,9 @@ BuddyInputs build_synthetic(uint8_t scene, const BuddyInputs& real,
   BuddyInputs s = real;   // copy link/battery/RTC
   s.prompt_active = false;
   s.prompt_sent   = false;
+  s.prompt_id[0] = '\0';
+  s.prompt_tool[0] = '\0';
+  s.prompt_hint[0] = '\0';
   s.msg[0] = '\0';
   s.running = 0; s.waiting = 0;
   s.total = 18274;
@@ -110,34 +128,38 @@ BuddyInputs build_synthetic(uint8_t scene, const BuddyInputs& real,
             s.running = 3; s.waiting = 1; s.token_rate_per_min = 420; break;
     case 4: s.persona = PersonaState::Attention;
             std::strncpy(s.msg, "attention needed", sizeof(s.msg)); break;
-    case 5: // SAFE approval
-            s.prompt_active = true;
-            std::strncpy(s.prompt_tool, "Read", sizeof(s.prompt_tool));
-            std::strncpy(s.prompt_hint, "src/main.cpp", sizeof(s.prompt_hint));
-            s.prompt_arrived_ms = now_ms - 1200;
-            break;
-    case 6: // NEUTRAL approval
+    case 5:
+    case 6: {
+            const uint32_t scene_age = now_ms - g_st.scene_start_ms;
             s.prompt_active = true;
             std::strncpy(s.prompt_tool, "WebFetch", sizeof(s.prompt_tool));
-            std::strncpy(s.prompt_hint, "https://docs.claude.com/release",
+            std::strncpy(s.prompt_hint, "fetch animation timing notes for motion polish",
                          sizeof(s.prompt_hint));
-            s.prompt_arrived_ms = now_ms - 3400;
+            std::snprintf(s.prompt_id, sizeof(s.prompt_id), "demo-approve");
+            s.prompt_arrived_ms = now_ms - std::min<uint32_t>(scene_age + (scene == 6 ? 1100u : 300u), 4200u);
+            s.persona = PersonaState::Attention;
+            s.running = 1;
+            s.waiting = 1;
+            std::strncpy(s.msg, scene == 5 ? "mock approval request" : "holding for approval",
+                         sizeof(s.msg));
             break;
-    case 7: // CAUTION approval
-            s.prompt_active = true;
-            std::strncpy(s.prompt_tool, "Edit", sizeof(s.prompt_tool));
-            std::strncpy(s.prompt_hint, "src/ui.cpp lines 120-140",
-                         sizeof(s.prompt_hint));
-            s.prompt_arrived_ms = now_ms - 6000;
-            break;
-    case 8: // DANGER approval
+          }
+    case 7:
+    case 8: {
+            const uint32_t scene_age = now_ms - g_st.scene_start_ms;
             s.prompt_active = true;
             std::strncpy(s.prompt_tool, "Bash", sizeof(s.prompt_tool));
-            std::strncpy(s.prompt_hint,
-                         "rm -rf build/ && cmake --build build/",
+            std::strncpy(s.prompt_hint, "rm -rf build/ && cmake --build build/",
                          sizeof(s.prompt_hint));
-            s.prompt_arrived_ms = now_ms - 8000;
+            std::snprintf(s.prompt_id, sizeof(s.prompt_id), "demo-deny");
+            s.prompt_arrived_ms = now_ms - std::min<uint32_t>(scene_age + (scene == 8 ? 700u : 0u), 2200u);
+            s.persona = PersonaState::Attention;
+            s.running = 1;
+            s.waiting = 1;
+            std::strncpy(s.msg, scene == 7 ? "new approval request" : "faster deny pass",
+                         sizeof(s.msg));
             break;
+          }
     case 9:  s.persona = PersonaState::Heart; break;
     case 10: s.persona = PersonaState::Celebrate; break;
     case 11: s.persona = PersonaState::Dizzy; break;
@@ -166,6 +188,7 @@ void draw_scene(uint8_t scene, const BuddyInputs& in, BuddyOutputs& out,
   // We create a real CoreIntent locally so delegates don't escape up into
   // the actual stack; we ignore whatever they set.
   CoreIntent local_intent{};
+  BuddyOutputs local_out{};
 
   switch(scene) {
     case 0: {
@@ -203,38 +226,47 @@ void draw_scene(uint8_t scene, const BuddyInputs& in, BuddyOutputs& out,
     }
     case 2: case 3: case 4:
       face::set_base(face, geom::kEyeCxLeft, geom::kEyeCxRight, geom::kEyeCy);
-      home::vtable()->tick(in, out, face, local_intent, now_ms);
+      home::vtable()->tick(in, local_out, face, local_intent, now_ms);
       draw_demo_chrome(in, scene, now_ms);
       break;
     case 5: case 6: case 7: case 8:
       face::set_base(face, 180, 210, 36);
-      approval::vtable()->tick(in, out, face, local_intent, now_ms);
+      if((scene == 6 || scene == 8) && !g_st.scene_action_fired) {
+        const uint32_t scene_age = now_ms - g_st.scene_start_ms;
+        const uint32_t trigger_ms = (scene == 6) ? 1100u : 700u;
+        if(scene_age >= trigger_ms) {
+          approval::vtable()->on_button(scene == 6 ? Button::A : Button::B,
+                                        ButtonEdge::ShortTap, local_out, local_intent, now_ms);
+          g_st.scene_action_fired = true;
+        }
+      }
+      approval::vtable()->tick(in, local_out, face, local_intent, now_ms);
       draw_demo_chrome(in, scene, now_ms);
       break;
     case 9: case 10: case 11:
       face::set_base(face, geom::kEyeCxLeft, geom::kEyeCxRight, geom::kEyeCy);
-      buddy_mode::vtable()->tick(in, out, face, local_intent, now_ms);
+      buddy_mode::vtable()->tick(in, local_out, face, local_intent, now_ms);
       draw_demo_chrome(in, scene, now_ms);
       break;
     case 12:
-      stats::vtable()->tick(in, out, face, local_intent, now_ms);
+      stats::vtable()->tick(in, local_out, face, local_intent, now_ms);
       draw_demo_chrome(in, scene, now_ms);
       break;
     case 13:
-      usage::vtable()->tick(in, out, face, local_intent, now_ms);
+      usage::vtable()->tick(in, local_out, face, local_intent, now_ms);
       draw_demo_chrome(in, scene, now_ms);
       break;
     case 14:
-      permissions::vtable()->tick(in, out, face, local_intent, now_ms);
+      permissions::vtable()->tick(in, local_out, face, local_intent, now_ms);
       draw_demo_chrome(in, scene, now_ms);
       break;
     case 15:
-      info::vtable()->tick(in, out, face, local_intent, now_ms);
+      info::vtable()->tick(in, local_out, face, local_intent, now_ms);
       draw_demo_chrome(in, scene, now_ms);
       break;
     case 16:
       face::set_base(face, 80, 240, 60);
-      dock_clock::vtable()->tick(in, out, face, local_intent, now_ms);
+      dock_clock::vtable()->tick(in, local_out, face, local_intent, now_ms);
       draw_demo_chrome(in, scene, now_ms);
       break;
     case 17: {
@@ -315,9 +347,9 @@ void tick(const BuddyInputs& real_in, BuddyOutputs& out, FaceState& face,
           CoreIntent& intent, uint32_t now_ms) {
   // Handle exit wipe first.
   if(g_st.exiting) {
-    // Draw the current scene underneath.
-    const BuddyInputs syn = build_synthetic(g_st.scene, real_in, now_ms);
-    draw_scene(g_st.scene, syn, out, face, now_ms);
+      // Draw the current scene underneath.
+      const BuddyInputs syn = build_synthetic(g_st.scene, real_in, now_ms);
+      draw_scene(g_st.scene, syn, out, face, now_ms);
     g_st.exit_wipe.draw(now_ms);
     if(g_st.exit_wipe.is_done(now_ms)) {
       intent.replace = true;
@@ -330,8 +362,7 @@ void tick(const BuddyInputs& real_in, BuddyOutputs& out, FaceState& face,
   if(!g_st.paused) {
     const uint32_t dur = kScenes[g_st.scene].duration_ms;
     if((now_ms - g_st.scene_start_ms) >= dur) {
-      g_st.scene = (g_st.scene + 1) % kSceneCount;
-      g_st.scene_start_ms = now_ms;
+      enter_scene(static_cast<uint8_t>((g_st.scene + 1) % kSceneCount), now_ms);
     }
   }
 
@@ -348,11 +379,9 @@ void on_button(Button btn, ButtonEdge edge, BuddyOutputs& /*out*/,
                CoreIntent& /*intent*/, uint32_t now_ms) {
   if(edge != ButtonEdge::ShortTap) return;
   if(btn == Button::A) {
-    g_st.scene = (g_st.scene == 0) ? (kSceneCount - 1) : (g_st.scene - 1);
-    g_st.scene_start_ms = now_ms;
+    enter_scene((g_st.scene == 0) ? (kSceneCount - 1) : (g_st.scene - 1), now_ms);
   } else if(btn == Button::B) {
-    g_st.scene = (g_st.scene + 1) % kSceneCount;
-    g_st.scene_start_ms = now_ms;
+    enter_scene(static_cast<uint8_t>((g_st.scene + 1) % kSceneCount), now_ms);
   } else if(btn == Button::X) {
     g_st.paused = !g_st.paused;
   } else if(btn == Button::Y) {

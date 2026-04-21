@@ -75,6 +75,20 @@ enum class FaceStyle : uint8_t {
   Mascot,
 };
 
+enum class PromptResult : uint8_t {
+  None,
+  Approved,
+  Denied,
+  TimedOut,
+};
+
+enum class PromptResultBand : uint8_t {
+  None,
+  Quick,
+  Normal,
+  Slow,
+};
+
 // Risk tier computed by risk_tier.cpp from prompt.tool.
 enum class RiskTier : uint8_t { Safe, Neutral, Caution, Danger };
 
@@ -127,6 +141,10 @@ struct BuddyInputs {
   char     prompt_tool[32] = "";
   char     prompt_hint[96] = "";
   uint32_t prompt_arrived_ms = 0;
+  PromptResult     prompt_result = PromptResult::None;
+  PromptResultBand prompt_result_band = PromptResultBand::None;
+  uint32_t prompt_result_started_ms = 0;
+  uint32_t prompt_result_until_ms = 0;
 
   // Persona base state (V1 drives this from protocol).
   PersonaState persona = PersonaState::Sleep;

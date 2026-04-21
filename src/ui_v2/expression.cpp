@@ -52,61 +52,71 @@ const Entry* table() {
   static const Entry kTable[] = {
       // NEUTRAL — default idle rect.
       {ExpressionId::Neutral, "neutral",
-       make(kBase(), kBase(), 150, Easing::EaseOut)},
-
-      // HAPPY — lids closed a bit, slight squash, outward tilt.
-      {ExpressionId::Happy, "happy",
        [] {
-         Eye l = kBase(); l.lid_top = 4; l.lid_bot = 4; l.squish = 140; l.tilt = -60;
-         Eye r = kBase(); r.lid_top = 4; r.lid_bot = 4; r.squish = 140; r.tilt = 60;
-         return make(l, r, 120, Easing::EaseOut);
+         Eye l = kBase(); l.h = 46; l.lid_top = 2; l.lid_bot = 1;
+         Eye r = kBase(); r.h = 46; r.lid_top = 2; r.lid_bot = 1;
+         return make(l, r, 180, Easing::EaseOut);
        }()},
 
-      // JOY — happy + upward bounce. The "bounce" is a cy offset handled by face engine.
+      // HAPPY — relaxed lids and a softer outward lift.
+      {ExpressionId::Happy, "happy",
+       [] {
+         Eye l = kBase(); l.w = 26; l.h = 40; l.lid_top = 10; l.lid_bot = 4; l.squish = 146; l.tilt = -40;
+         Eye r = kBase(); r.w = 26; r.h = 40; r.lid_top = 10; r.lid_bot = 4; r.squish = 146; r.tilt = 40;
+         return make(l, r, 150, Easing::EaseOut);
+       }()},
+
+      // JOY — a fuller, more playful squish than happy.
       {ExpressionId::Joy, "joy",
        [] {
-         Eye l = kBase(); l.lid_top = 6; l.lid_bot = 6; l.squish = 150; l.tilt = -80;
-         Eye r = kBase(); r.lid_top = 6; r.lid_bot = 6; r.squish = 150; r.tilt = 80;
+         Eye l = kBase(); l.w = 28; l.h = 40; l.lid_top = 12; l.lid_bot = 6; l.squish = 170; l.tilt = -70;
+         Eye r = kBase(); r.w = 28; r.h = 40; r.lid_top = 12; r.lid_bot = 6; r.squish = 170; r.tilt = 70;
          return make(l, r, 180, Easing::Spring);
        }()},
 
-      // FOCUSED — taller, narrower.
+      // FOCUSED — narrower slit with a deliberate brow.
       {ExpressionId::Focused, "focused",
        [] {
-         Eye l = kBase(); l.h = 52; l.w = 22;
-         Eye r = kBase(); r.h = 52; r.w = 22;
-         return make(l, r, 80, Easing::Linear);
+         Eye l = kBase(); l.h = 52; l.w = 20; l.lid_top = 4; l.lid_bot = 2;
+         l.brow_y = -3; l.brow_tilt = -24; l.brow_len = 16;
+         Eye r = kBase(); r.h = 52; r.w = 20; r.lid_top = 4; r.lid_bot = 2;
+         r.brow_y = -3; r.brow_tilt = 24; r.brow_len = 16;
+         return make(l, r, 120, Easing::EaseOut);
        }()},
 
-      // ATTENTIVE — slightly wider and taller.
+      // ATTENTIVE — taller and a touch wider with bright, open lids.
       {ExpressionId::Attentive, "attentive",
        [] {
-         Eye l = kBase(); l.w = 26; l.h = 52;
-         Eye r = kBase(); r.w = 26; r.h = 52;
-         return make(l, r, 120, Easing::EaseIn);
+         Eye l = kBase(); l.w = 26; l.h = 54; l.r = 3; l.lid_top = 2;
+         Eye r = kBase(); r.w = 26; r.h = 54; r.r = 3; r.lid_top = 2;
+         return make(l, r, 160, Easing::EaseOut);
        }()},
 
-      // ALERT — pop: big and slightly tilted inward.
+      // ALERT — biggest, clearest open pose.
       {ExpressionId::Alert, "alert",
        [] {
-         Eye l = kBase(); l.w = 28; l.h = 54; l.tilt = 30;
-         Eye r = kBase(); r.w = 28; r.h = 54; r.tilt = -30;
-         return make(l, r, 60, Easing::EaseOut);
+         Eye l = kBase(); l.w = 30; l.h = 56; l.r = 3; l.tilt = 24;
+         l.brow_y = -6; l.brow_tilt = 42; l.brow_len = 20;
+         Eye r = kBase(); r.w = 30; r.h = 56; r.r = 3; r.tilt = -24;
+         r.brow_y = -6; r.brow_tilt = -42; r.brow_len = 20;
+         return make(l, r, 110, Easing::EaseOut);
        }()},
 
-      // SKEPTICAL — asymmetric brows.
+      // SKEPTICAL — asymmetry does the acting work.
       {ExpressionId::Skeptical, "skeptical",
        [] {
-         Eye l = kBase(); l.brow_y = 4;  l.brow_tilt =  60; l.brow_len = 18;
-         Eye r = kBase(); r.brow_y = -4; r.brow_tilt = -60; r.brow_len = 18;
+         Eye l = kBase(); l.lid_top = 7; l.lid_bot = 1;
+         l.brow_y = 1; l.brow_tilt = 80; l.brow_len = 18;
+         Eye r = kBase(); r.lid_top = 2; r.lid_bot = 6;
+         r.brow_y = -5; r.brow_tilt = -70; r.brow_len = 18;
          return make(l, r, 200, Easing::EaseInOut);
        }()},
 
       // SLEEPY — heavy top lids.
       {ExpressionId::Sleepy, "sleepy",
        [] {
-         Eye l = kBase(); l.lid_top = 12; l.lid_bot = 4;
-         Eye r = kBase(); r.lid_top = 12; r.lid_bot = 4;
+         Eye l = kBase(); l.h = 44; l.lid_top = 16; l.lid_bot = 4;
+         Eye r = kBase(); r.h = 44; r.lid_top = 16; r.lid_bot = 4;
          return make(l, r, 300, Easing::EaseInOut);
        }()},
 
@@ -145,16 +155,20 @@ const Entry* table() {
       // SQUINT — tight.
       {ExpressionId::Squint, "squint",
        [] {
-         Eye l = kBase(); l.w = 20; l.lid_top = 8; l.lid_bot = 8;
-         Eye r = kBase(); r.w = 20; r.lid_top = 8; r.lid_bot = 8;
-         return make(l, r, 80, Easing::EaseIn);
+         Eye l = kBase(); l.w = 22; l.h = 30; l.lid_top = 12; l.lid_bot = 12;
+         l.brow_y = -3; l.brow_tilt = 26; l.brow_len = 16;
+         Eye r = kBase(); r.w = 22; r.h = 30; r.lid_top = 12; r.lid_bot = 12;
+         r.brow_y = -3; r.brow_tilt = -26; r.brow_len = 16;
+         return make(l, r, 90, Easing::EaseIn);
        }()},
 
-      // SAD — bottom lids high, inward tilt.
+      // SAD — heavier lower lid and softened angle.
       {ExpressionId::Sad, "sad",
        [] {
-         Eye l = kBase(); l.lid_bot = 8; l.tilt = 30;
-         Eye r = kBase(); r.lid_bot = 8; r.tilt = -30;
+         Eye l = kBase(); l.h = 44; l.lid_top = 4; l.lid_bot = 10; l.tilt = 25;
+         l.brow_y = -2; l.brow_tilt = 34; l.brow_len = 18;
+         Eye r = kBase(); r.h = 44; r.lid_top = 4; r.lid_bot = 10; r.tilt = -25;
+         r.brow_y = -2; r.brow_tilt = -34; r.brow_len = 18;
          return make(l, r, 250, Easing::EaseOut);
        }()},
 
@@ -166,20 +180,22 @@ const Entry* table() {
          return make(l, r, 1000, Easing::Linear);
        }()},
 
-      // HEART — taller + squish + double-blink cadence handled by engine.
+      // HEART — fullest positive pose; the cadence lives in the beat layer.
       {ExpressionId::Heart, "heart",
        [] {
-         Eye l = kBase(); l.h = 52; l.squish = 160;
-         Eye r = kBase(); r.h = 52; r.squish = 160;
-         return make(l, r, 200, Easing::EaseOut);
+         Eye l = kBase(); l.w = 26; l.h = 52; l.lid_top = 5; l.lid_bot = 1; l.squish = 170;
+         l.brow_y = -4; l.brow_tilt = -18; l.brow_len = 18;
+         Eye r = kBase(); r.w = 26; r.h = 52; r.lid_top = 5; r.lid_bot = 1; r.squish = 170;
+         r.brow_y = -4; r.brow_tilt = 18; r.brow_len = 18;
+         return make(l, r, 220, Easing::EaseOut);
        }()},
 
-      // SCAN — base pose; face engine sweeps gaze left-right while this is active.
+      // SCAN — narrower sensor-like gaze pose.
       {ExpressionId::Scan, "scan",
        [] {
-         Eye l = kBase(); l.h = 44;
-         Eye r = kBase(); r.h = 44;
-         return make(l, r, 600, Easing::Linear);
+         Eye l = kBase(); l.w = 22; l.h = 44; l.r = 2; l.lid_top = 3; l.lid_bot = 3;
+         Eye r = kBase(); r.w = 22; r.h = 44; r.r = 2; r.lid_top = 3; r.lid_bot = 3;
+         return make(l, r, 260, Easing::EaseInOut);
        }()},
 
       // SURPRISE — large punch.
@@ -190,19 +206,41 @@ const Entry* table() {
          return make(l, r, 40, Easing::EaseOut);
        }()},
 
-      // PROUD — happy + chin-up (eyes down 2, brow up 2).
+      // PROUD — settled confidence.
       {ExpressionId::Proud, "proud",
        [] {
-         Eye l = kBase(); l.lid_top = 4; l.lid_bot = 4; l.brow_y = -2; l.brow_tilt = -40; l.brow_len = 18;
-         Eye r = kBase(); r.lid_top = 4; r.lid_bot = 4; r.brow_y = -2; r.brow_tilt = 40;  r.brow_len = 18;
-         return make(l, r, 200, Easing::EaseOut);
+         Eye l = kBase(); l.w = 26; l.h = 44; l.lid_top = 6; l.lid_bot = 4;
+         l.brow_y = -4; l.brow_tilt = -55; l.brow_len = 18;
+         Eye r = kBase(); r.w = 26; r.h = 44; r.lid_top = 6; r.lid_bot = 4;
+         r.brow_y = -4; r.brow_tilt = 55;  r.brow_len = 18;
+         return make(l, r, 220, Easing::EaseOut);
+       }()},
+
+      // CONCERNED — delayed approval with worry instead of panic.
+      {ExpressionId::Concerned, "concerned",
+       [] {
+         Eye l = kBase(); l.w = 22; l.h = 46; l.lid_top = 8; l.lid_bot = 4;
+         l.brow_y = -2; l.brow_tilt = 64; l.brow_len = 18;
+         Eye r = kBase(); r.w = 22; r.h = 46; r.lid_top = 8; r.lid_bot = 4;
+         r.brow_y = -2; r.brow_tilt = -64; r.brow_len = 18;
+         return make(l, r, 220, Easing::EaseInOut);
+       }()},
+
+      // RELIEF — a softer reward than heart, used after non-instant approvals.
+      {ExpressionId::Relief, "relief",
+       [] {
+         Eye l = kBase(); l.w = 26; l.h = 46; l.lid_top = 5; l.lid_bot = 3; l.squish = 146; l.tilt = -15;
+         l.brow_y = -3; l.brow_tilt = -25; l.brow_len = 18;
+         Eye r = kBase(); r.w = 26; r.h = 46; r.lid_top = 5; r.lid_bot = 3; r.squish = 146; r.tilt = 15;
+         r.brow_y = -3; r.brow_tilt = 25; r.brow_len = 18;
+         return make(l, r, 180, Easing::EaseOut);
        }()},
 
       {ExpressionId::GlyphCaretIn, "glyph_caret",
        [] {
-         Eye l = kGlyphBase(EyeKind::CaretIn); l.tilt = -10;
-         Eye r = kGlyphBase(EyeKind::CaretIn); r.tilt = 10;
-         return make(l, r, 160, Easing::EaseOut);
+         Eye l = kGlyphBase(EyeKind::CaretIn, 22, 28); l.tilt = -10; l.stroke_px = 3;
+         Eye r = kGlyphBase(EyeKind::CaretIn, 22, 28); r.tilt = 10; r.stroke_px = 3;
+         return make(l, r, 180, Easing::EaseInOut);
        }()},
 
       {ExpressionId::GlyphArcUp, "glyph_arc",

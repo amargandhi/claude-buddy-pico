@@ -31,6 +31,8 @@ enum class ExpressionId : uint8_t {
   Scan,
   Surprise,
   Proud,
+  Concerned,
+  Relief,
   GlyphCaretIn,
   GlyphArcUp,
   GlyphDash,
