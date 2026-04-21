@@ -1,0 +1,63 @@
+{
+  "mode": "text",
+  "name": "sunset blob",
+  "colors": {
+    "body": "#FF8C42",
+    "bg": "#120C1E",
+    "text": "#FFF4D6",
+    "textDim": "#B79A84",
+    "ink": "#120C1E"
+  },
+  "states": {
+    "sleep": {
+      "delay": 700,
+      "frames": [
+        "(-_-) zZ",
+        "(-.-) zZ"
+      ]
+    },
+    "idle": {
+      "delay": 260,
+      "frames": [
+        "(o_o)",
+        "(o_o)~"
+      ]
+    },
+    "busy": {
+      "delay": 180,
+      "frames": [
+        "(>_<)>",
+        "<(>_<)"
+      ]
+    },
+    "attention": {
+      "delay": 160,
+      "frames": [
+        "(!o!)",
+        "(o_o)!"
+      ]
+    },
+    "celebrate": {
+      "delay": 180,
+      "frames": [
+        "\\(^o^)/",
+        "<(^o^<)",
+        "(^o^)>"
+      ]
+    },
+    "dizzy": {
+      "delay": 150,
+      "frames": [
+        "(@_@)",
+        "(x_x)"
+      ]
+    },
+    "heart": {
+      "delay": 220,
+      "frames": [
+        "(^_^)<3",
+        "<3(^_^)"
+      ]
+    }
+  }
+}

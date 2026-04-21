@@ -1,0 +1,22 @@
+.DS_Store
+.idea/
+.vscode/
+.claude/
+# Originals of the Physical Build photos — large PNGs (~560 MB total, two over GitHub's 25 MB web-upload limit).
+# The web-optimised JPEGs in "Physical Build/Photos_web/" are committed instead and are what BUILD_GUIDE.md references.
+Physical Build/Photos/
+build/
+cmake-build-*/
+compile_commands.json
+*.bin
+*.elf
+*.hex
+*.map
+*.uf2
+tmp_ui_issue.png
+# Original 11 MB HEVC capture; the H.264 + GIF re-encodes in docs/assets/ are committed instead.
+Claude Pico Buddy on Mac Mini.mp4
+third_party/*
+!third_party/README.md
+toolchains/*
+!toolchains/README.md
