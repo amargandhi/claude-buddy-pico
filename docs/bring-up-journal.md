@@ -1,9 +1,6 @@
 # Claude Buddy Pico Bring-Up Journal
 
-This document is the long-form build log for the first real Pico 2 W Hardware Buddy prototype. It is written to be useful in two ways:
-
-1. As a repo-side reference for anyone repeating the build.
-2. As raw material for a later blog post about the project.
+This document is the long-form build log for the first real Pico 2 W Hardware Buddy prototype. It is written as a repo-side reference for anyone repeating the build.
 
 The work captured here happened on April 17, 2026.
 
@@ -233,20 +230,6 @@ That split is useful for future contributors because it gives them a ladder:
 1. Prove the hardware.
 2. Prove BLE discovery.
 3. Prove protocol and UI behavior.
-
-## Suggested Blog Structure
-
-If this becomes a public blog post later, a strong structure would be:
-
-1. Why build a Pico Hardware Buddy instead of copying the ESP32 sample
-2. The exact hardware stack and why it is enough
-3. The mechanical trap with the LiPo SHIM and Display Pack
-4. The smoke-test phase
-5. The Claude Desktop feature-gating detour
-6. The BLE discovery bug caused by a too-large advertisement packet
-7. The protocol validation bug that caused `No response`
-8. The secure pairing work needed for a proper v1
-9. The final enclosure and polish work still left
 
 ## Current Status
 

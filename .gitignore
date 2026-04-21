@@ -1,6 +1,7 @@
 .DS_Store
 .idea/
 .vscode/
+.claude/
 # Originals of the Physical Build photos — large PNGs (~560 MB total, two over GitHub's 25 MB web-upload limit).
 # The web-optimised JPEGs in "Physical Build/Photos_web/" are committed instead and are what BUILD_GUIDE.md references.
 Physical Build/Photos/

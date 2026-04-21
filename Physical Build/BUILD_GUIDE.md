@@ -104,8 +104,6 @@ Three boards: Pico 2 W → LiPo SHIM → Display Pack.
 
 With nothing soldered and no battery attached, push the Pico onto the Display Pack's female headers. It should seat with no force on the glass. If it doesn't sit flat, find what's obstructing it before going further.
 
-![Bare Pico 2 W](Photos_web/01_hardware/01_02_pico_2w_top.jpg)
-
 ### 3.2 Solder the LiPo SHIM
 
 Pull the Pico off the display. Place the LiPo SHIM on the back of the Pico (opposite the RF can). The SHIM's silkscreen aligns with a subset of the Pico header pins. The JST connector ends up pointing away from the USB port.
@@ -114,15 +112,11 @@ Solder one pin at a time from the Pico side. Inspect under magnification for bri
 
 ![Pico + SHIM, back](Photos_web/01_hardware/01_03_pico_shim_stack_back.jpg)
 
-![Pico + SHIM, side profile](Photos_web/01_hardware/01_04_pico_shim_stack_side.jpg)
-
 ![Pico + SHIM, underside with battery JST](Photos_web/01_hardware/01_05_pico_shim_stack_underside.jpg)
 
 ### 3.3 Refit the Pico into the display
 
 Press the Pico-plus-SHIM stack back into the Display Pack. The display silkscreen reads upside-down when the USB port points up — that's the right orientation for this case.
-
-![Stack with battery, ready](Photos_web/01_hardware/01_06_parts_layout_a.jpg)
 
 ---
 
@@ -223,10 +217,6 @@ Plug in USB, or press the SHIM power button if the battery is charged.
 
 ![Powered on — Claude home](Photos_web/03_assembly/03_20_assembled_claude_linked.jpg)
 
-![Powered on — pet screen](Photos_web/03_assembly/03_19_assembled_powered_on_pet_screen.jpg)
-
-![Powered on — info screen](Photos_web/03_assembly/03_21_assembled_claude_info_screen.jpg)
-
 `A` / `B` step through screens, `X` / `Y` jump to Pet and Home. `Hold A` opens settings, `Hold Y` puts the buddy to sleep. Full reference: [../README.md#button-map](../README.md).
 
 ---
@@ -258,14 +248,6 @@ The BLE smoke test should show `ADVERTISING` and a name field of `Claude Pico`.
 - **Pairs but never gets past `ADVERTISING`.** Developer Mode off in Claude Desktop, or you're on a Claude Desktop build that doesn't expose Hardware Buddy yet. Not a firmware problem.
 - **Battery feels warm.** Disconnect immediately. Inspect SHIM solder for bridges around `VBUS` / `VSYS` / `3V3`. Don't reconnect until you've found the bridge.
 - **Buttons sticky after assembly.** Case walls shaving the printed stems. Open up, sand stems with 400-grit, reinstall.
-
-### Gaps in this guide
-
-I didn't photograph these during the reference build. Replacing them on the next build:
-
-- The battery clip mid-glue (only have before and after).
-- Each printed button being pushed into its slot.
-- The two M3 screws being driven.
 
 ---
 

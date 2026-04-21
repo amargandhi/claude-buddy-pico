@@ -2,9 +2,15 @@
 
 A BLE desktop buddy for [Claude Desktop](https://claude.ai/download), ported from Felix Rieseberg's M5Stick Hardware Buddy to the Raspberry Pi Pico 2 W. Community port — not produced or endorsed by Anthropic.
 
-![Claude Buddy Pico on a Mac mini, paired and reacting to Claude Desktop activity](docs/assets/buddy_demo.gif)
+![Claude Buddy Pico on a Mac mini, asking the user to approve a SHELL COMMAND tool call](docs/assets/buddy_on_mac_mini_approval.jpg)
 
-Upstream: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). Original author: [Felix Rieseberg's commits](https://github.com/anthropics/claude-desktop-buddy/commits?author=felixrieseberg).
+<p align="center">
+  <img src="docs/assets/buddy_demo.gif" alt="Claude Buddy Pico reacting to Claude Desktop activity" width="49%">
+  &nbsp;
+  <img src="Physical%20Build/Photos_web/03_assembly/03_07_all_parts_hero.jpg" alt="All parts laid out: Pico 2 W, Pimoroni Display Pack 2.8, LiPo SHIM, 2000 mAh battery, 3D-printed Clawd case, M3 screws" width="49%">
+</p>
+
+Upstream: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). Original author: [Felix Rieseberg](https://github.com/anthropics/claude-desktop-buddy/commits?author=felixrieseberg). This Pico port: [@amargandhi](https://x.com/amargandhi).
 
 ## What it is
 
@@ -111,7 +117,7 @@ If Homebrew's embedded toolchain install fails on your machine, `scripts/extract
 - `src/` — active firmware targets and character renderer
 - `src/ui_v2/` — V2 UI engine, screens, palette, face system, transitions
 - `src/_legacy/` — archived bringup scaffold, not part of the current build
-- `docs/` — protocol notes, V2 design docs, feature matrix, bringup journal, limitations
+- `docs/` — protocol notes, feature matrix, bringup journal, limitations, user guide
 - `Physical Build/` — CAD, printable case, and the hardware build guide
 - `scripts/` — bootstrap, dependency, and configure helpers
 - `third_party/` — vendor SDK clones
