@@ -44,6 +44,12 @@
 
 #include "claude_buddy_pico.h"
 
+#if BUDDY_UI_V2
+#include "ui_v2/ui_core.h"
+#include "ui_v2/permissions_log.h"
+#include "ui_v2/ui_state.h"
+#endif
+
 using namespace pimoroni;
 
 namespace {
@@ -62,7 +68,7 @@ constexpr uint32_t kDemoStepMs = 8000;
 constexpr uint32_t kStorageOffset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 constexpr uint32_t kPersistDebounceMs = 2000;
 constexpr uint32_t kStorageMagic = 0x43425032;
-constexpr uint16_t kStorageVersion = 3;
+constexpr uint16_t kStorageVersion = 5;
 constexpr uint8_t kCustomSpeciesSentinel = 0xff;
 constexpr uint8_t kInfoPageCount = 7;
 constexpr uint8_t kPetPageCount = 2;
@@ -109,6 +115,24 @@ enum PersonaState : uint8_t {
   P_HEART,
 };
 
+enum class FaceMotionProfile : uint8_t {
+  Full = 0,
+  Reduced = 1,
+  Static = 2,
+};
+
+enum class FaceRenderStyle : uint8_t {
+  Classic = 0,
+  Hybrid = 1,
+  Mascot = 2,
+};
+
+enum class PowerEventState : uint8_t {
+  None = 0,
+  UsbPlug = 1,
+  UsbUnplug = 2,
+};
+
 enum class DisplayMode : uint8_t {
   Normal,
   Pet,
@@ -137,6 +161,74 @@ const DemoScenario demo_scenarios[] = {
     {"celebrate", 5, 0, 0, true, 142000, "Demo: task wrapped up", {"tests passed", "tokens milestone"}, 2},
 };
 
+struct PersistentBlobV3 {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t size;
+  uint8_t brightness_level;
+  uint8_t led_enabled;
+  uint8_t transcript_enabled;
+  uint8_t demo_mode;
+  uint8_t clock_enabled;
+  uint8_t ascii_species_idx;
+  uint8_t custom_selected;
+  // Face animation gate. Claimed from the old `reserved0` slot. Polarity
+  // is *inverted* on purpose: 0 = animated (default), 1 = static. That way
+  // v3 blobs — which wrote reserved0=0 — load as "animated on" rather
+  // than making every existing user look like their buddy lost its soul
+  // on first upgrade. `state.motion_profile = (face_disabled == 0) ? Full : Static`.
+  // When we bump kStorageVersion next, we can flip to positive polarity.
+  uint8_t face_disabled;
+  char device_name[32];
+  char owner[32];
+  uint32_t approvals;
+  uint32_t denials;
+  uint32_t nap_seconds;
+  uint32_t tokens_total;
+  uint32_t level;
+  uint16_t velocity[8];
+  uint8_t vel_idx;
+  uint8_t vel_count;
+  uint8_t custom_valid;
+  uint8_t reserved1;
+  PackDefinition custom_pack;
+  uint32_t crc;
+};
+
+struct PersistentBlobV4 {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t size;
+  uint8_t brightness_level;
+  uint8_t led_enabled;
+  uint8_t transcript_enabled;
+  uint8_t demo_mode;
+  uint8_t clock_enabled;
+  uint8_t ascii_species_idx;
+  uint8_t custom_selected;
+  uint8_t face_disabled;
+  char device_name[32];
+  char owner[32];
+  uint32_t approvals;
+  uint32_t denials;
+  uint32_t nap_seconds;
+  uint32_t tokens_total;
+  uint32_t level;
+  uint8_t pet_fed_pct;
+  uint8_t pet_energy_pct;
+  uint16_t pet_feeds;
+  uint16_t pet_plays;
+  uint16_t reserved2;
+  uint32_t pet_age_minutes;
+  uint16_t velocity[8];
+  uint8_t vel_idx;
+  uint8_t vel_count;
+  uint8_t custom_valid;
+  uint8_t reserved1;
+  PackDefinition custom_pack;
+  uint32_t crc;
+};
+
 struct PersistentBlob {
   uint32_t magic;
   uint16_t version;
@@ -148,7 +240,8 @@ struct PersistentBlob {
   uint8_t clock_enabled;
   uint8_t ascii_species_idx;
   uint8_t custom_selected;
-  uint8_t reserved0;
+  uint8_t motion_profile;
+  uint8_t face_style;
   char device_name[32];
   char owner[32];
   uint32_t approvals;
@@ -156,6 +249,12 @@ struct PersistentBlob {
   uint32_t nap_seconds;
   uint32_t tokens_total;
   uint32_t level;
+  uint8_t pet_fed_pct;
+  uint8_t pet_energy_pct;
+  uint16_t pet_feeds;
+  uint16_t pet_plays;
+  uint16_t reserved2;
+  uint32_t pet_age_minutes;
   uint16_t velocity[8];
   uint8_t vel_idx;
   uint8_t vel_count;
@@ -216,6 +315,8 @@ struct BuddyState {
   bool y_hold_fired = false;
   bool demo_mode = false;
   bool clock_enabled = true;
+  FaceMotionProfile motion_profile = FaceMotionProfile::Full;
+  FaceRenderStyle face_style = FaceRenderStyle::Hybrid;
   bool rtc_valid = false;
   bool xfer_active = false;
   bool xfer_file_open = false;
@@ -235,6 +336,8 @@ struct BuddyState {
   uint8_t vel_idx = 0;
   uint8_t vel_count = 0;
   uint8_t energy_at_nap = 3;
+  uint8_t pet_fed_pct = 80;
+  uint8_t pet_energy_pct = 70;
   uint8_t reset_confirm_idx = 0xff;
 
   uint16_t battery_mv = 0;
@@ -265,6 +368,14 @@ struct BuddyState {
   uint32_t xfer_total = 0;
   uint32_t xfer_total_written = 0;
   uint32_t persist_due_ms = 0;
+  uint32_t pet_age_minutes = 0;
+  uint32_t pet_last_decay_ms = 0;
+  uint32_t pet_last_persist_ms = 0;
+  uint32_t token_rate_window_start_ms = 0;
+  uint32_t token_rate_window_start_tokens_today = 0;
+  uint16_t token_rate_per_min = 0;
+  uint16_t power_event_seq = 0;
+  PowerEventState power_event = PowerEventState::None;
 
   absolute_time_t connected_since = nil_time;
   absolute_time_t last_heartbeat = nil_time;
@@ -302,6 +413,8 @@ struct BuddyState {
   uint8_t menu_sel = 0;
   uint8_t settings_sel = 0;
   uint8_t reset_sel = 0;
+  uint16_t pet_feeds = 0;
+  uint16_t pet_plays = 0;
 
   btstack_context_callback_registration_t send_request{};
   btstack_packet_callback_registration_t hci_event_callback_registration{};
@@ -324,6 +437,131 @@ void copy_string(char* dest, const size_t dest_size, const char* src) {
     return;
   }
   std::snprintf(dest, dest_size, "%s", src);
+}
+
+void append_ascii_text(char* dest, const size_t dest_size, size_t& len,
+                       const char* text) {
+  if(dest == nullptr || dest_size == 0 || text == nullptr) {
+    return;
+  }
+  while(*text != '\0' && len + 1 < dest_size) {
+    dest[len++] = *text++;
+  }
+  dest[len] = '\0';
+}
+
+void append_ascii_char(char* dest, const size_t dest_size, size_t& len,
+                       const char ch) {
+  if(dest == nullptr || dest_size == 0 || len + 1 >= dest_size) {
+    return;
+  }
+  dest[len++] = ch;
+  dest[len] = '\0';
+}
+
+void append_ascii_folded(char* dest, const size_t dest_size, size_t& len,
+                         const unsigned char* src, size_t& i,
+                         const size_t src_len) {
+  const unsigned char ch = src[i];
+  if(ch == '\\' && i + 1 < src_len) {
+    const unsigned char esc = src[i + 1];
+    if(esc == '"' || esc == '\\' || esc == '/') {
+      append_ascii_char(dest, dest_size, len, static_cast<char>(esc));
+      i += 2;
+      return;
+    }
+    if(esc == 'n' || esc == 'r' || esc == 't') {
+      append_ascii_char(dest, dest_size, len, ' ');
+      i += 2;
+      return;
+    }
+    if(esc == 'u' && i + 5 < src_len) {
+      const char* repl = nullptr;
+      if(std::memcmp(src + i + 2, "2014", 4) == 0 || std::memcmp(src + i + 2, "2013", 4) == 0) repl = "-";
+      else if(std::memcmp(src + i + 2, "2022", 4) == 0) repl = "*";
+      else if(std::memcmp(src + i + 2, "2192", 4) == 0) repl = "->";
+      else if(std::memcmp(src + i + 2, "2026", 4) == 0) repl = "...";
+      else if(std::memcmp(src + i + 2, "2018", 4) == 0 || std::memcmp(src + i + 2, "2019", 4) == 0) repl = "'";
+      else if(std::memcmp(src + i + 2, "201C", 4) == 0 || std::memcmp(src + i + 2, "201D", 4) == 0) repl = "\"";
+      else if(std::memcmp(src + i + 2, "00A0", 4) == 0) repl = " ";
+      if(repl != nullptr) {
+        append_ascii_text(dest, dest_size, len, repl);
+      }
+      i += 6;
+      return;
+    }
+  }
+
+  if(ch < 0x80) {
+    append_ascii_char(dest, dest_size, len,
+                      (ch >= 32 || ch == ' ') ? static_cast<char>(ch) : ' ');
+    i += 1;
+    return;
+  }
+
+  if(i + 2 < src_len && ch == 0xE2 && src[i + 1] == 0x80 &&
+     (src[i + 2] == 0x94 || src[i + 2] == 0x93)) {
+    append_ascii_char(dest, dest_size, len, '-');
+    i += 3;
+    return;
+  }
+  if(i + 2 < src_len && ch == 0xE2 && src[i + 1] == 0x80 && src[i + 2] == 0xA2) {
+    append_ascii_char(dest, dest_size, len, '*');
+    i += 3;
+    return;
+  }
+  if(i + 2 < src_len && ch == 0xE2 && src[i + 1] == 0x86 && src[i + 2] == 0x92) {
+    append_ascii_text(dest, dest_size, len, "->");
+    i += 3;
+    return;
+  }
+  if(i + 2 < src_len && ch == 0xE2 && src[i + 1] == 0x80 && src[i + 2] == 0xA6) {
+    append_ascii_text(dest, dest_size, len, "...");
+    i += 3;
+    return;
+  }
+  if(i + 2 < src_len && ch == 0xE2 && src[i + 1] == 0x80 &&
+     (src[i + 2] == 0x98 || src[i + 2] == 0x99)) {
+    append_ascii_char(dest, dest_size, len, '\'');
+    i += 3;
+    return;
+  }
+  if(i + 2 < src_len && ch == 0xE2 && src[i + 1] == 0x80 &&
+     (src[i + 2] == 0x9C || src[i + 2] == 0x9D)) {
+    append_ascii_char(dest, dest_size, len, '"');
+    i += 3;
+    return;
+  }
+  if(i + 1 < src_len && ch == 0xC2 && src[i + 1] == 0xA0) {
+    append_ascii_char(dest, dest_size, len, ' ');
+    i += 2;
+    return;
+  }
+
+  append_ascii_char(dest, dest_size, len, '?');
+  if((ch & 0xE0u) == 0xC0u && i + 1 < src_len) {
+    i += 2;
+  } else if((ch & 0xF0u) == 0xE0u && i + 2 < src_len) {
+    i += 3;
+  } else if((ch & 0xF8u) == 0xF0u && i + 3 < src_len) {
+    i += 4;
+  } else {
+    i += 1;
+  }
+}
+
+const char* extract_ascii_json_string(const char* start, char* out,
+                                      const size_t out_size) {
+  size_t len = 0;
+  out[0] = '\0';
+  const auto* src = reinterpret_cast<const unsigned char*>(start);
+  const size_t src_len = std::strlen(start);
+  size_t i = 0;
+  while(i < src_len && src[i] != '"') {
+    append_ascii_folded(out, out_size, len, src, i, src_len);
+  }
+  out[len] = '\0';
+  return (i < src_len && src[i] == '"') ? (start + i + 1) : (start + i);
 }
 
 void safe_name_copy(char* dest, const size_t dest_size, const char* src) {
@@ -707,12 +945,7 @@ void extract_string_after(const char* line, const char* anchor, const char* key,
   }
   ++start;
 
-  size_t len = 0;
-  while(start[len] != '\0' && start[len] != '"' && len < out_size - 1) {
-    out[len] = start[len];
-    ++len;
-  }
-  out[len] = '\0';
+  extract_ascii_json_string(start, out, out_size);
 }
 
 void extract_entries(const char* line) {
@@ -738,19 +971,14 @@ void extract_entries(const char* line) {
     }
     ++start;
 
-    size_t len = 0;
-    while(start[len] != '\0' && start[len] != '"' && len < sizeof(next_lines[0]) - 1) {
-      next_lines[next_count][len] = start[len];
-      ++len;
-    }
-    next_lines[next_count][len] = '\0';
+    const char* end = extract_ascii_json_string(start, next_lines[next_count],
+                                                sizeof(next_lines[0]));
     ++next_count;
 
-    const char* end = std::strchr(start, '"');
-    if(end == nullptr) {
+    if(end == nullptr || *end == '\0') {
       break;
     }
-    start = end + 1;
+    start = end;
   }
 
   bool changed = next_count != state.line_count;
@@ -824,12 +1052,19 @@ uint8_t estimate_percent(const uint16_t millivolts) {
 
 void update_battery_state() {
   const absolute_time_t now = get_absolute_time();
+  const bool usb_now = cyw43_arch_gpio_get(CYW43_WL_GPIO_VBUS_PIN) != 0;
+  if(!is_nil_time(state.last_battery_sample) && usb_now != state.usb_present) {
+    state.power_event = usb_now ? PowerEventState::UsbPlug
+                                : PowerEventState::UsbUnplug;
+    state.power_event_seq = static_cast<uint16_t>(state.power_event_seq + 1u);
+  }
+  state.usb_present = usb_now;
+
   if(!is_nil_time(state.last_battery_sample) &&
      absolute_time_diff_us(state.last_battery_sample, now) < static_cast<int64_t>(kBatterySampleMs) * 1000) {
     return;
   }
 
-  state.usb_present = cyw43_arch_gpio_get(CYW43_WL_GPIO_VBUS_PIN) != 0;
   uint16_t millivolts = read_vsys_mv();
   if(state.usb_present && millivolts < 1000) {
     millivolts = state.battery_mv >= 1000 ? state.battery_mv : 5000;
@@ -874,6 +1109,29 @@ void stats_on_bridge_tokens(const uint32_t bridge_total) {
   if(state.level > level_before) {
     trigger_one_shot(P_CELEBRATE, 3000);
     schedule_persist();
+  }
+}
+
+void update_token_rate_sample(const uint32_t tokens_today) {
+  const uint32_t now = now_ms();
+  if(state.token_rate_window_start_ms == 0 ||
+     tokens_today < state.token_rate_window_start_tokens_today) {
+    state.token_rate_window_start_ms = now;
+    state.token_rate_window_start_tokens_today = tokens_today;
+    state.token_rate_per_min = 0;
+    return;
+  }
+
+  const uint32_t elapsed_ms = now - state.token_rate_window_start_ms;
+  if(elapsed_ms >= 5000) {
+    const uint32_t delta = tokens_today - state.token_rate_window_start_tokens_today;
+    const uint32_t per_min = (delta * 60000u) / std::max<uint32_t>(elapsed_ms, 1u);
+    state.token_rate_per_min = static_cast<uint16_t>(std::min<uint32_t>(per_min, 65535u));
+  }
+
+  if(elapsed_ms >= 30000) {
+    state.token_rate_window_start_ms = now;
+    state.token_rate_window_start_tokens_today = tokens_today;
   }
 }
 
@@ -939,6 +1197,76 @@ uint8_t energy_tier() {
   if(energy < 0) energy = 0;
   if(energy > 5) energy = 5;
   return static_cast<uint8_t>(energy);
+}
+
+uint8_t clamp_pct(const int value) {
+  if(value < 0) return 0;
+  if(value > 100) return 100;
+  return static_cast<uint8_t>(value);
+}
+
+void reset_pet_state() {
+  state.pet_fed_pct = 80;
+  state.pet_energy_pct = 70;
+  state.pet_feeds = 0;
+  state.pet_plays = 0;
+  state.pet_age_minutes = 0;
+  state.pet_last_decay_ms = now_ms();
+  state.pet_last_persist_ms = now_ms();
+}
+
+void update_pet_state() {
+  const uint32_t now = now_ms();
+  if(state.pet_last_decay_ms == 0) {
+    state.pet_last_decay_ms = now;
+    return;
+  }
+  const uint32_t elapsed_ms = now - state.pet_last_decay_ms;
+  if(elapsed_ms < 60000u) return;
+
+  const uint32_t minutes = elapsed_ms / 60000u;
+  state.pet_last_decay_ms += minutes * 60000u;
+  state.pet_age_minutes += minutes;
+
+  int fed = state.pet_fed_pct;
+  int energy = state.pet_energy_pct;
+
+  if(!state.napping && !state.screen_off) {
+    fed -= static_cast<int>(minutes);
+  }
+
+  if(state.napping || state.screen_off || state.base_state == P_SLEEP) {
+    energy += static_cast<int>(minutes * 3u);
+  } else if(state.running > 0 || state.waiting > 0 || state.prompt_active) {
+    energy -= static_cast<int>(minutes * 2u);
+  } else {
+    energy -= static_cast<int>((minutes + 1u) / 2u);
+  }
+
+  state.pet_fed_pct = clamp_pct(fed);
+  state.pet_energy_pct = clamp_pct(energy);
+
+  if(now - state.pet_last_persist_ms >= 30u * 60u * 1000u) {
+    schedule_persist();
+    state.pet_last_persist_ms = now;
+  }
+}
+
+void pet_feed() {
+  state.pet_fed_pct = 100;
+  if(state.pet_energy_pct < 96) {
+    state.pet_energy_pct = static_cast<uint8_t>(
+        std::min<int>(100, static_cast<int>(state.pet_energy_pct) + 4));
+  }
+  ++state.pet_feeds;
+  schedule_persist();
+}
+
+void pet_play() {
+  state.pet_energy_pct = clamp_pct(static_cast<int>(state.pet_energy_pct) - 8);
+  state.pet_fed_pct = clamp_pct(static_cast<int>(state.pet_fed_pct) - 2);
+  ++state.pet_plays;
+  schedule_persist();
 }
 
 void update_snapshot_banner() {
@@ -1096,6 +1424,14 @@ void factory_reset_state() {
   state.transcript_enabled = true;
   state.demo_mode = false;
   state.clock_enabled = true;
+  state.motion_profile = FaceMotionProfile::Full;
+  state.face_style = FaceRenderStyle::Hybrid;
+  state.token_rate_window_start_ms = 0;
+  state.token_rate_window_start_tokens_today = 0;
+  state.token_rate_per_min = 0;
+  state.power_event = PowerEventState::None;
+  state.power_event_seq = 0;
+  reset_pet_state();
   clear_stats();
   state.owner[0] = '\0';
   copy_string(state.device_name, sizeof(state.device_name), kDefaultDeviceName);
@@ -1112,9 +1448,15 @@ void clear_stats() {
   state.level = 0;
   state.last_bridge_tokens = state.tokens_today;
   state.tokens_synced = false;
+  state.token_rate_window_start_ms = 0;
+  state.token_rate_window_start_tokens_today = state.tokens_today;
+  state.token_rate_per_min = 0;
   std::memset(state.velocity, 0, sizeof(state.velocity));
   state.vel_idx = 0;
   state.vel_count = 0;
+#if BUDDY_UI_V2
+  ui_v2::perms::clear();
+#endif
 }
 
 PersistentBlob build_persistent_blob() {
@@ -1129,6 +1471,8 @@ PersistentBlob build_persistent_blob() {
   blob.clock_enabled = state.clock_enabled ? 1 : 0;
   blob.ascii_species_idx = buddyCustomSpeciesSelected() ? 0 : buddySpeciesIdx();
   blob.custom_selected = buddyCustomSpeciesSelected() ? 1 : 0;
+  blob.motion_profile = static_cast<uint8_t>(state.motion_profile);
+  blob.face_style = static_cast<uint8_t>(state.face_style);
   copy_string(blob.device_name, sizeof(blob.device_name), state.device_name);
   copy_string(blob.owner, sizeof(blob.owner), state.owner);
   blob.approvals = state.approvals;
@@ -1136,6 +1480,11 @@ PersistentBlob build_persistent_blob() {
   blob.nap_seconds = state.nap_seconds;
   blob.tokens_total = state.tokens_total;
   blob.level = state.level;
+  blob.pet_fed_pct = state.pet_fed_pct;
+  blob.pet_energy_pct = state.pet_energy_pct;
+  blob.pet_feeds = state.pet_feeds;
+  blob.pet_plays = state.pet_plays;
+  blob.pet_age_minutes = state.pet_age_minutes;
   std::memcpy(blob.velocity, state.velocity, sizeof(blob.velocity));
   blob.vel_idx = state.vel_idx;
   blob.vel_count = state.vel_count;
@@ -1189,6 +1538,50 @@ void apply_persistent_blob(const PersistentBlob& blob) {
   state.transcript_enabled = blob.transcript_enabled != 0;
   state.demo_mode = blob.demo_mode != 0;
   state.clock_enabled = blob.clock_enabled != 0;
+  state.motion_profile =
+      static_cast<FaceMotionProfile>(std::min<uint8_t>(blob.motion_profile, 2));
+  state.face_style =
+      static_cast<FaceRenderStyle>(std::min<uint8_t>(blob.face_style, 2));
+  copy_string(state.device_name, sizeof(state.device_name), blob.device_name);
+  copy_string(state.owner, sizeof(state.owner), blob.owner);
+  state.approvals = blob.approvals;
+  state.denials = blob.denials;
+  state.nap_seconds = blob.nap_seconds;
+  state.tokens_total = blob.tokens_total;
+  state.level = blob.level;
+  state.pet_fed_pct = blob.pet_fed_pct;
+  state.pet_energy_pct = blob.pet_energy_pct;
+  state.pet_feeds = blob.pet_feeds;
+  state.pet_plays = blob.pet_plays;
+  state.pet_age_minutes = blob.pet_age_minutes;
+  std::memcpy(state.velocity, blob.velocity, sizeof(state.velocity));
+  state.vel_idx = blob.vel_idx;
+  state.vel_count = blob.vel_count;
+  state.pet_last_decay_ms = now_ms();
+  state.pet_last_persist_ms = now_ms();
+
+  installed_pack = blob.custom_valid ? blob.custom_pack : PackDefinition{};
+  if(installed_pack.valid) {
+    buddySetCustomSpecies(&installed_pack);
+    if(!blob.custom_selected) {
+      buddySetSpeciesIdx(std::min<uint8_t>(blob.ascii_species_idx, buddySpeciesCount() - 1));
+    }
+  } else {
+    buddyClearCustomSpecies();
+    buddySetSpeciesIdx(std::min<uint8_t>(blob.ascii_species_idx, buddySpeciesCount() - 1));
+  }
+}
+
+void apply_persistent_blob_v3(const PersistentBlobV3& blob) {
+  state.brightness_level = std::min<uint8_t>(blob.brightness_level, 4);
+  state.led_enabled = blob.led_enabled != 0;
+  state.transcript_enabled = blob.transcript_enabled != 0;
+  state.demo_mode = blob.demo_mode != 0;
+  state.clock_enabled = blob.clock_enabled != 0;
+  state.motion_profile = (blob.face_disabled == 0)
+      ? FaceMotionProfile::Full
+      : FaceMotionProfile::Static;
+  state.face_style = FaceRenderStyle::Hybrid;
   copy_string(state.device_name, sizeof(state.device_name), blob.device_name);
   copy_string(state.owner, sizeof(state.owner), blob.owner);
   state.approvals = blob.approvals;
@@ -1199,6 +1592,47 @@ void apply_persistent_blob(const PersistentBlob& blob) {
   std::memcpy(state.velocity, blob.velocity, sizeof(state.velocity));
   state.vel_idx = blob.vel_idx;
   state.vel_count = blob.vel_count;
+  reset_pet_state();
+
+  installed_pack = blob.custom_valid ? blob.custom_pack : PackDefinition{};
+  if(installed_pack.valid) {
+    buddySetCustomSpecies(&installed_pack);
+    if(!blob.custom_selected) {
+      buddySetSpeciesIdx(std::min<uint8_t>(blob.ascii_species_idx, buddySpeciesCount() - 1));
+    }
+  } else {
+    buddyClearCustomSpecies();
+    buddySetSpeciesIdx(std::min<uint8_t>(blob.ascii_species_idx, buddySpeciesCount() - 1));
+  }
+}
+
+void apply_persistent_blob_v4(const PersistentBlobV4& blob) {
+  state.brightness_level = std::min<uint8_t>(blob.brightness_level, 4);
+  state.led_enabled = blob.led_enabled != 0;
+  state.transcript_enabled = blob.transcript_enabled != 0;
+  state.demo_mode = blob.demo_mode != 0;
+  state.clock_enabled = blob.clock_enabled != 0;
+  state.motion_profile = (blob.face_disabled == 0)
+      ? FaceMotionProfile::Full
+      : FaceMotionProfile::Static;
+  state.face_style = FaceRenderStyle::Hybrid;
+  copy_string(state.device_name, sizeof(state.device_name), blob.device_name);
+  copy_string(state.owner, sizeof(state.owner), blob.owner);
+  state.approvals = blob.approvals;
+  state.denials = blob.denials;
+  state.nap_seconds = blob.nap_seconds;
+  state.tokens_total = blob.tokens_total;
+  state.level = blob.level;
+  state.pet_fed_pct = blob.pet_fed_pct;
+  state.pet_energy_pct = blob.pet_energy_pct;
+  state.pet_feeds = blob.pet_feeds;
+  state.pet_plays = blob.pet_plays;
+  state.pet_age_minutes = blob.pet_age_minutes;
+  std::memcpy(state.velocity, blob.velocity, sizeof(state.velocity));
+  state.vel_idx = blob.vel_idx;
+  state.vel_count = blob.vel_count;
+  state.pet_last_decay_ms = now_ms();
+  state.pet_last_persist_ms = now_ms();
 
   installed_pack = blob.custom_valid ? blob.custom_pack : PackDefinition{};
   if(installed_pack.valid) {
@@ -1213,16 +1647,43 @@ void apply_persistent_blob(const PersistentBlob& blob) {
 }
 
 bool load_persistent_state() {
-  const auto* blob = reinterpret_cast<const PersistentBlob*>(XIP_BASE + kStorageOffset);
-  if(blob->magic != kStorageMagic || blob->version != kStorageVersion || blob->size != sizeof(PersistentBlob)) {
-    return false;
+  const uint8_t* const storage = reinterpret_cast<const uint8_t*>(XIP_BASE + kStorageOffset);
+  const auto* blob = reinterpret_cast<const PersistentBlob*>(storage);
+  if(blob->magic == kStorageMagic &&
+     blob->version == kStorageVersion &&
+     blob->size == sizeof(PersistentBlob)) {
+    const uint32_t crc = fnv1a32(blob, sizeof(PersistentBlob) - sizeof(blob->crc));
+    if(crc != blob->crc) {
+      return false;
+    }
+    apply_persistent_blob(*blob);
+    return true;
   }
-  const uint32_t crc = fnv1a32(blob, sizeof(PersistentBlob) - sizeof(blob->crc));
-  if(crc != blob->crc) {
-    return false;
+
+  const auto* blob_v3 = reinterpret_cast<const PersistentBlobV3*>(storage);
+  if(blob_v3->magic == kStorageMagic &&
+     blob_v3->version == 3 &&
+     blob_v3->size == sizeof(PersistentBlobV3)) {
+    const uint32_t crc = fnv1a32(blob_v3, sizeof(PersistentBlobV3) - sizeof(blob_v3->crc));
+    if(crc != blob_v3->crc) {
+      return false;
+    }
+    apply_persistent_blob_v3(*blob_v3);
+    return true;
   }
-  apply_persistent_blob(*blob);
-  return true;
+
+  const auto* blob_v4 = reinterpret_cast<const PersistentBlobV4*>(storage);
+  if(blob_v4->magic == kStorageMagic &&
+     blob_v4->version == 4 &&
+     blob_v4->size == sizeof(PersistentBlobV4)) {
+    const uint32_t crc = fnv1a32(blob_v4, sizeof(PersistentBlobV4) - sizeof(blob_v4->crc));
+    if(crc != blob_v4->crc) {
+      return false;
+    }
+    apply_persistent_blob_v4(*blob_v4);
+    return true;
+  }
+  return false;
 }
 
 bool extract_time_sync(const char* line, uint32_t* local_epoch_out) {
@@ -1465,6 +1926,7 @@ void handle_protocol_line(const char* line) {
   state.running = static_cast<uint32_t>(extract_int(line, "running", state.running));
   state.waiting = static_cast<uint32_t>(extract_int(line, "waiting", state.waiting));
   state.tokens_today = static_cast<uint32_t>(extract_int(line, "tokens_today", state.tokens_today));
+  update_token_rate_sample(state.tokens_today);
   state.recently_completed = extract_bool(line, "completed", false);
 
   const uint32_t bridge_tokens = static_cast<uint32_t>(extract_int(line, "tokens", state.last_bridge_tokens));
@@ -2150,27 +2612,84 @@ void render_screen() {
 }
 
 void update_led() {
+  auto lerp_u8 = [](uint8_t a, uint8_t b, uint8_t t) -> uint8_t {
+    return static_cast<uint8_t>(a + ((static_cast<int>(b) - a) * t) / 255);
+  };
+  auto triangle_level = [](uint32_t now, uint32_t period_ms,
+                           uint8_t lo, uint8_t hi) -> uint8_t {
+    if(period_ms == 0 || hi <= lo) return hi;
+    const uint32_t half = period_ms / 2u;
+    const uint32_t phase = now % period_ms;
+    const uint32_t ramp = (phase <= half) ? phase : (period_ms - phase);
+    const uint32_t span = static_cast<uint32_t>(hi - lo);
+    return static_cast<uint8_t>(lo + ((span * ramp * 2u) / period_ms));
+  };
+  auto prompt_is_dangerous = [](const char* tool) -> bool {
+    if(tool == nullptr) return false;
+    return std::strcmp(tool, "Bash") == 0 ||
+           std::strcmp(tool, "Agent") == 0 ||
+           std::strncmp(tool, "mcp__", 5) == 0;
+  };
+  auto species_rgb = []() {
+    const uint16_t c = buddySpeciesColor();
+    const uint8_t r5 = static_cast<uint8_t>((c >> 11) & 0x1f);
+    const uint8_t g6 = static_cast<uint8_t>((c >> 5) & 0x3f);
+    const uint8_t b5 = static_cast<uint8_t>(c & 0x1f);
+    struct { uint8_t r; uint8_t g; uint8_t b; } rgb{
+        static_cast<uint8_t>((r5 * 255) / 31),
+        static_cast<uint8_t>((g6 * 255) / 63),
+        static_cast<uint8_t>((b5 * 255) / 31),
+    };
+    return rgb;
+  };
   auto apply_led = [](const uint8_t r, const uint8_t g, const uint8_t b) {
     led.set_rgb(static_cast<uint8_t>((r * kLedMax) / 255), static_cast<uint8_t>((g * kLedMax) / 255),
                 static_cast<uint8_t>((b * kLedMax) / 255));
   };
+  auto apply_scaled = [&](uint8_t r, uint8_t g, uint8_t b, uint8_t level) {
+    apply_led(static_cast<uint8_t>((r * level) / 255),
+              static_cast<uint8_t>((g * level) / 255),
+              static_cast<uint8_t>((b * level) / 255));
+  };
+
+  constexpr uint8_t kIdleBlueR = 106;
+  constexpr uint8_t kIdleBlueG = 155;
+  constexpr uint8_t kIdleBlueB = 204;
+  constexpr uint8_t kClayR = 217;
+  constexpr uint8_t kClayG = 119;
+  constexpr uint8_t kClayB = 87;
+  constexpr uint8_t kAmberR = 201;
+  constexpr uint8_t kAmberG = 141;
+  constexpr uint8_t kAmberB = 71;
+  constexpr uint8_t kTerracottaR = 188;
+  constexpr uint8_t kTerracottaG = 102;
+  constexpr uint8_t kTerracottaB = 74;
+  constexpr uint8_t kLavenderR = 148;
+  constexpr uint8_t kLavenderG = 122;
+  constexpr uint8_t kLavenderB = 176;
 
   if(!state.led_enabled) {
     apply_led(0, 0, 0);
     return;
   }
   if(state.xfer_active) {
-    if((now_ms() / 250) % 2 == 0) apply_led(255, 0, 255);
-    else apply_led(32, 0, 64);
+    const uint8_t level = triangle_level(now_ms(), 1100, 96, 255);
+    apply_scaled(kClayR, kClayG, kClayB, level);
     return;
   }
   if(state.battery_low) {
-    apply_led(255, 0, 0);
+    const uint8_t level = triangle_level(now_ms(), 900, 112, 255);
+    apply_scaled(kTerracottaR, kTerracottaG, kTerracottaB, level);
     return;
   }
   if(state.prompt_active && !state.response_sent) {
-    if((now_ms() / 300) % 2 == 0) apply_led(255, 160, 0);
-    else apply_led(0, 0, 0);
+    if(prompt_is_dangerous(state.prompt_tool)) {
+      const uint8_t level = triangle_level(now_ms(), 420, 36, 255);
+      apply_scaled(kTerracottaR, kTerracottaG, kTerracottaB, level);
+    } else {
+      const uint8_t level = triangle_level(now_ms(), 700, 28, 236);
+      apply_scaled(kAmberR, kAmberG, kAmberB, level);
+    }
     return;
   }
   if(!state.link_connected) {
@@ -2178,22 +2697,51 @@ void update_led() {
     return;
   }
   if(!state.secure) {
-    apply_led(255, 0, 255);
+    const uint8_t level = triangle_level(now_ms(), 1400, 88, 208);
+    apply_scaled(kLavenderR, kLavenderG, kLavenderB, level);
     return;
   }
+
+#if BUDDY_UI_V2
+  const ui_v2::screens::ScreenId screen = ui_v2::core::current_screen();
+  const bool petish_screen = (screen == ui_v2::screens::ScreenId::Pet ||
+                              screen == ui_v2::screens::ScreenId::CharacterPicker);
+  if(petish_screen) {
+    uint8_t r = kIdleBlueR;
+    uint8_t g = kIdleBlueG;
+    uint8_t b = kIdleBlueB;
+    if(screen == ui_v2::screens::ScreenId::Pet && state.pet_energy_pct <= 20) {
+      r = 118; g = 108; b = 100;
+    } else if(screen == ui_v2::screens::ScreenId::Pet && state.pet_fed_pct <= 25) {
+      r = kAmberR; g = kAmberG; b = kAmberB;
+    } else {
+      const auto accent = species_rgb();
+      r = lerp_u8(kIdleBlueR, accent.r, 108);
+      g = lerp_u8(kIdleBlueG, accent.g, 108);
+      b = lerp_u8(kIdleBlueB, accent.b, 108);
+    }
+    const uint8_t level = triangle_level(now_ms(), 2800, 120, 192);
+    apply_scaled(r, g, b, level);
+    return;
+  }
+#endif
+
   switch(state.active_state) {
     case P_BUSY:
-      apply_led(0, 0, 255);
+      apply_scaled(kIdleBlueR, kIdleBlueG, kIdleBlueB,
+                   triangle_level(now_ms(), 1600, 132, 255));
       break;
     case P_CELEBRATE:
     case P_HEART:
-      apply_led(255, 64, 160);
+      apply_scaled(kClayR, kClayG, kClayB,
+                   triangle_level(now_ms(), 1200, 160, 255));
       break;
     case P_ATTENTION:
-      apply_led(255, 180, 0);
+      apply_scaled(kAmberR, kAmberG, kAmberB,
+                   triangle_level(now_ms(), 900, 120, 255));
       break;
     default:
-      apply_led(0, 255, 0);
+      apply_led(kIdleBlueR, kIdleBlueG, kIdleBlueB);
       break;
   }
 }
@@ -2413,6 +2961,45 @@ void handle_buttons() {
     state.last_y = y;
     return;
   }
+
+#if BUDDY_UI_V2
+  // Under V2, every remaining button edge is the screen stack's to handle
+  // — menus, settings, reset, approvals are all V2 screens now. The V1
+  // prompt / menu / settings / reset branches below stay compiled out so
+  // they can come back if the flag is flipped off.
+  //
+  // Note: we intentionally do NOT forward the V1 x_held "dizzy" Easter
+  // egg. V2 screens (notably reset) use X-hold as a real input, and
+  // letting V1 intercept it here would swallow those presses.
+  {
+    const uint32_t now = now_ms();
+    if(a && !state.last_a) ui_v2::core::on_button_event(ui_v2::Button::A, ui_v2::ButtonEdge::Down, now);
+    if(b && !state.last_b) ui_v2::core::on_button_event(ui_v2::Button::B, ui_v2::ButtonEdge::Down, now);
+    if(x && !state.last_x) ui_v2::core::on_button_event(ui_v2::Button::X, ui_v2::ButtonEdge::Down, now);
+    if(y && !state.last_y) ui_v2::core::on_button_event(ui_v2::Button::Y, ui_v2::ButtonEdge::Down, now);
+
+    if(!a && state.last_a) ui_v2::core::on_button_event(ui_v2::Button::A, ui_v2::ButtonEdge::Up, now);
+    if(!b && state.last_b) ui_v2::core::on_button_event(ui_v2::Button::B, ui_v2::ButtonEdge::Up, now);
+    if(!x && state.last_x) ui_v2::core::on_button_event(ui_v2::Button::X, ui_v2::ButtonEdge::Up, now);
+    if(!y && state.last_y) ui_v2::core::on_button_event(ui_v2::Button::Y, ui_v2::ButtonEdge::Up, now);
+
+    if(a_pressed) ui_v2::core::on_button_event(ui_v2::Button::A, ui_v2::ButtonEdge::ShortTap,  now);
+    if(a_held)    ui_v2::core::on_button_event(ui_v2::Button::A, ui_v2::ButtonEdge::HoldFired, now);
+    if(b_pressed) ui_v2::core::on_button_event(ui_v2::Button::B, ui_v2::ButtonEdge::ShortTap,  now);
+    if(x_pressed) ui_v2::core::on_button_event(ui_v2::Button::X, ui_v2::ButtonEdge::ShortTap,  now);
+    if(x_held)    ui_v2::core::on_button_event(ui_v2::Button::X, ui_v2::ButtonEdge::HoldFired, now);
+    if(y_pressed) ui_v2::core::on_button_event(ui_v2::Button::Y, ui_v2::ButtonEdge::ShortTap,  now);
+    // y_held is never observed here — the global y_held-nap shortcut
+    // above already returned before reaching this block.
+    (void)y_held;
+
+    state.last_a = a;
+    state.last_b = b;
+    state.last_x = x;
+    state.last_y = y;
+    return;
+  }
+#endif
 
   if(x_held && !state.prompt_active && !state.menu_open && !state.settings_open && !state.reset_open) {
     trigger_one_shot(P_DIZZY, 2200);
@@ -2697,6 +3284,240 @@ void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t* packet, u
   }
 }
 
+#if BUDDY_UI_V2
+// V1 ↔ V2 translation layer. These two helpers are the only coupling
+// surface between the monolith and the V2 UI. Everything above them is V1
+// (BLE, flash, battery, protocol). Everything in src/ui_v2/ is V2. The
+// smoke target uses synthetic BuddyInputs; the production target uses
+// these. Keep them read-only on `state` from V2's direction (V2 only
+// mutates state through drain_outputs below).
+void populate_v2_inputs(ui_v2::BuddyInputs& in, uint32_t now) {
+  in.now_ms = now;
+
+  copy_string(in.device_name, sizeof(in.device_name), state.device_name);
+  copy_string(in.owner,       sizeof(in.owner),       state.owner);
+
+  // Link. V1 does not carry a first-class "connecting" enum, but the local
+  // BLE state is rich enough to approximate it honestly: connected at the GAP
+  // layer, not yet secure, no passkey displayed, and NUS not linked yet.
+  if(!state.link_connected) {
+    in.link = state.advertising ? ui_v2::LinkState::Advertising
+                                : ui_v2::LinkState::NotAdvertising;
+  } else if(state.secure) {
+    in.link = ui_v2::LinkState::LinkedSecure;
+  } else if(!state.nus_linked && state.passkey[0] == '\0') {
+    in.link = ui_v2::LinkState::Connecting;
+  } else if(state.passkey[0] != '\0') {
+    in.link = ui_v2::LinkState::PairingPasskey;
+  } else {
+    in.link = ui_v2::LinkState::LinkedInsecure;
+  }
+  copy_string(in.passkey, sizeof(in.passkey), state.passkey);
+
+  // Power. V1 reports USB presence but not a distinct charging signal;
+  // UsbCharging is left unused until the hardware provides it.
+  in.power = state.usb_present ? ui_v2::PowerState::UsbPowered
+                               : ui_v2::PowerState::Battery;
+  in.battery_pct = state.battery_percent;
+  in.battery_mv  = state.battery_mv;
+  in.battery_low = state.battery_low;
+  switch(state.power_event) {
+    case PowerEventState::UsbPlug:   in.power_event = ui_v2::PowerEvent::UsbPlug; break;
+    case PowerEventState::UsbUnplug: in.power_event = ui_v2::PowerEvent::UsbUnplug; break;
+    case PowerEventState::None:      in.power_event = ui_v2::PowerEvent::None; break;
+  }
+  in.power_event_seq = state.power_event_seq;
+
+  // Protocol / heartbeat.
+  in.total        = state.total;
+  in.running      = state.running;
+  in.waiting      = state.waiting;
+  copy_string(in.msg, sizeof(in.msg), state.msg);
+  in.tokens_today = state.tokens_today;
+  in.tokens_total = state.tokens_total;
+  in.token_rate_per_min = state.token_rate_per_min;
+  if(is_nil_time(state.last_heartbeat)) {
+    in.heartbeat_age_ms = kPromptKeepAliveMs + 1000u;
+  } else {
+    const int64_t diff_us = absolute_time_diff_us(state.last_heartbeat, get_absolute_time());
+    in.heartbeat_age_ms = static_cast<uint32_t>(std::max<int64_t>(0, diff_us / 1000));
+  }
+
+  // Transcript lines.
+  in.line_count = state.line_count > 8 ? 8 : state.line_count;
+  for(uint8_t i = 0; i < in.line_count; ++i) {
+    copy_string(in.lines[i], sizeof(in.lines[i]), state.lines[i]);
+  }
+  in.line_gen = state.line_gen;
+
+  // Velocity: V1's velocity[] is per-prompt response-time samples in
+  // seconds, not tokens/min. Exposing it to V2 as "usage rate" would
+  // mislead the Usage sparkline. Leave it empty until V1 gains a real
+  // tokens/min series.
+  in.velocity_count = 0;
+  std::memset(in.velocity, 0, sizeof(in.velocity));
+
+  // Prompt.
+  in.prompt_active     = state.prompt_active;
+  in.prompt_sent       = state.response_sent;
+  copy_string(in.prompt_id,   sizeof(in.prompt_id),   state.prompt_id);
+  copy_string(in.prompt_tool, sizeof(in.prompt_tool), state.prompt_tool);
+  copy_string(in.prompt_hint, sizeof(in.prompt_hint), state.prompt_hint);
+  in.prompt_arrived_ms = state.prompt_arrived_ms;
+
+  // Persona & persisted counters. V1's PersonaState and V2's mirror enum
+  // share numeric order (see ui_state.h), so the cast is load-bearing.
+  in.persona     = static_cast<ui_v2::PersonaState>(state.active_state);
+  in.approvals   = state.approvals;
+  in.denials     = state.denials;
+  in.nap_seconds = state.nap_seconds;
+  in.level       = state.level;
+  in.pet_fed_pct = state.pet_fed_pct;
+  in.pet_energy_pct = state.pet_energy_pct;
+  in.pet_feeds = state.pet_feeds;
+  in.pet_plays = state.pet_plays;
+  in.pet_age_minutes = state.pet_age_minutes;
+
+  // Settings.
+  in.brightness_level   = state.brightness_level;
+  in.led_enabled        = state.led_enabled;
+  in.transcript_enabled = state.transcript_enabled;
+  in.demo_enabled       = state.demo_mode;
+  in.dock_clock_enabled = state.clock_enabled;
+  in.motion_profile = static_cast<ui_v2::MotionProfile>(state.motion_profile);
+  // V2 now ships one primary visual identity. Keep the persisted field for
+  // compatibility/migration, but present a single hybrid style to the UI so
+  // Home, Pet, Boot, and approval beats all share the same acting grammar.
+  in.face_style = ui_v2::FaceStyle::Hybrid;
+
+  // RTC.
+  in.rtc_valid       = state.rtc_valid;
+  in.rtc_local_epoch = state.rtc_valid ? current_local_epoch() : 0;
+
+  // Character pack transfer.
+  in.xfer_active  = state.xfer_active;
+  in.xfer_written = state.xfer_total_written;
+  in.xfer_total   = state.xfer_total;
+}
+
+void drain_v2_outputs(const ui_v2::BuddyOutputs& out, uint32_t now) {
+  // Prompt response. handle_prompt_decision is guarded inside for
+  // prompt_active/response_sent, so duplicate presses are safe.
+  if(out.send_approve_once) handle_prompt_decision("once");
+  if(out.send_deny)         handle_prompt_decision("deny");
+
+  if(out.request_nap_toggle) toggle_nap();
+  if(out.request_screen_off) state.screen_off = true;
+  if(out.set_advertising && !state.link_connected) {
+    const bool enable = state.advertising ? false : out.advertising_enabled;
+    gap_advertisements_enable(enable ? 1 : 0);
+    state.advertising = enable;
+    state.passkey[0] = '\0';
+    if(enable) {
+      set_status("Advertising");
+      set_banner("Waiting for Claude Desktop");
+    } else {
+      set_status("Idle");
+      set_banner("Press A to advertise");
+    }
+  }
+
+  if(out.request_clear_stats) {
+    clear_stats();
+    persist_state();
+    set_ack("Cleared stats");
+  }
+
+  if(out.request_clear_pack) {
+    delete_custom_pack();
+    set_ack("Deleted character");
+  }
+
+  if(out.request_factory_reset) {
+    if(state.connection_handle != HCI_CON_HANDLE_INVALID) {
+      gap_delete_bonding(state.peer_addr_type, state.peer_addr);
+    }
+    state.paired = false;
+    state.secure = false;
+    state.security_level = 0;
+    factory_reset_state();
+    set_ack("Factory reset");
+  }
+
+  if(out.request_unpair) {
+    if(state.connection_handle != HCI_CON_HANDLE_INVALID) {
+      gap_delete_bonding(state.peer_addr_type, state.peer_addr);
+    }
+    state.paired = false;
+    state.secure = false;
+    state.security_level = 0;
+    set_ack("Bond cleared");
+  }
+
+  if(out.request_pet_feed) {
+    pet_feed();
+    set_ack("Fed pet");
+  }
+
+  if(out.request_pet_play) {
+    pet_play();
+    set_ack("Played");
+  }
+
+  if(out.set_character_index) {
+    buddySetSpeciesIdx(out.character_index);
+    persist_state();
+    set_ack("Character set");
+  }
+
+  if(out.set_persona) {
+    const uint32_t duration_ms = (out.persona_until_ms > now)
+                                 ? (out.persona_until_ms - now) : 0;
+    trigger_one_shot(static_cast<PersonaState>(out.persona_override),
+                     duration_ms);
+  }
+
+  // Settings. V1 mirrors these two policies:
+  //   - Explicit setting changes (Settings screen toggles) persist now.
+  //   - Implicit state drift (counters, nap time, xfer progress) uses
+  //     schedule_persist() via the `dirty_persist` flag to coalesce
+  //     flash writes.
+  bool persist_now = false;
+  if(out.set_brightness) {
+    state.brightness_level = std::min<uint8_t>(out.brightness_level, 4);
+    st7789.set_backlight(kBrightnessLevels[state.brightness_level]);
+    persist_now = true;
+  }
+  if(out.set_led_enabled)   { state.led_enabled        = out.led_enabled;        persist_now = true; }
+  if(out.set_transcript)    { state.transcript_enabled = out.transcript_enabled; persist_now = true; }
+  if(out.set_demo_enabled)  { state.demo_mode          = out.demo_enabled;       persist_now = true; }
+  if(out.set_dock_clock)    { state.clock_enabled      = out.dock_clock_enabled; persist_now = true; }
+  if(out.set_motion_profile) {
+    state.motion_profile = static_cast<FaceMotionProfile>(out.motion_profile);
+    persist_now = true;
+  }
+  if(out.set_face_style) {
+    state.face_style = static_cast<FaceRenderStyle>(out.face_style);
+    persist_now = true;
+  }
+  if(persist_now) {
+    persist_state();
+  } else if(out.dirty_persist) {
+    schedule_persist();
+  }
+
+  // LED override. V1's update_led() runs each tick from derived persona;
+  // if V2 emits set_led_rgb this frame it overrides that, gated by the
+  // global led_enabled toggle so Settings > LED off still means off.
+  if(out.set_led_rgb) {
+    if(state.led_enabled) led.set_rgb(out.led_r, out.led_g, out.led_b);
+    else                  led.set_rgb(0, 0, 0);
+  }
+
+  if(out.set_backlight) st7789.set_backlight(out.backlight_level);
+}
+#endif  // BUDDY_UI_V2
+
 void ui_timer_handler(btstack_timer_source* ts) {
   update_battery_state();
 
@@ -2718,12 +3539,40 @@ void ui_timer_handler(btstack_timer_source* ts) {
 
   handle_buttons();
   flush_scheduled_persist();
+  update_pet_state();
   state.base_state = derive_state();
   if(static_cast<int32_t>(now_ms() - state.one_shot_until_ms) >= 0) {
     state.active_state = state.base_state;
   }
   update_led();
+
+#if BUDDY_UI_V2
+  // V2 owns rendering. We still let V1 compute base persona, drive the
+  // LED, and handle persistence above — those are V1's authority areas.
+  // Below, V2 reads a snapshot of state, renders, and emits any intents
+  // it wants V1 to act on.
+  //
+  // Backlight is a V1 concern: napping → 12, screen_off → 0, idle → dim,
+  // prompt → full. V1's render_screen() used to poke the backlight as a
+  // side effect of rendering; under V2 render_screen is dead, so we do it
+  // explicitly each tick. Without this the screen stays lit through naps
+  // and drains the battery — a visible regression the user would notice.
+  st7789.set_backlight(current_backlight());
+  {
+    const uint32_t now = now_ms();
+    ui_v2::BuddyInputs in{};
+    populate_v2_inputs(in, now);
+
+    ui_v2::BuddyOutputs out{};
+    ui_v2::core::tick_40ms(in, out, now);
+
+    drain_v2_outputs(out, now);
+
+    st7789.update(&graphics);
+  }
+#else
   render_screen();
+#endif
 
   btstack_run_loop_set_timer(ts, kUiTickMs);
   btstack_run_loop_add_timer(ts);
@@ -2786,7 +3635,17 @@ int main() {
   update_battery_state();
   setup_ble();
   update_snapshot_banner();
+
+#if BUDDY_UI_V2
+  // Initialize V2 AFTER load_persistent_state — so the face engine,
+  // seeded for blink randomness, gets a real boot-time value, and so
+  // the first V2 frame reads the persisted motion/style settings. First
+  // screen is Boot (~1.5 s), which hands off to Sync on first boot
+  // (no bond) or Home on subsequent boots.
+  ui_v2::core::init(&graphics, time_us_32(), now_ms());
+#else
   render_screen();
+#endif
   update_led();
 
   state.ui_timer.process = &ui_timer_handler;

@@ -130,6 +130,109 @@ pico_enable_stdio_usb(claude_buddy_pico_smoke 1)
 pico_enable_stdio_uart(claude_buddy_pico_smoke 0)
 pico_add_extra_outputs(claude_buddy_pico_smoke)
 
+# -----------------------------------------------------------------------------
+# V2 UI module (plan §2–§6). Lives entirely in src/ui_v2/. V1 is untouched;
+# this block only adds files to a standalone smoke target below and exposes
+# V2 sources as a variable that a future opt-in integration can merge into
+# the primary firmware target without rewriting V1.
+# -----------------------------------------------------------------------------
+set(UI_V2_SOURCES
+  src/ui_v2/gfx.cpp
+  src/ui_v2/eye.cpp
+  src/ui_v2/expression.cpp
+  src/ui_v2/face.cpp
+  src/ui_v2/transitions.cpp
+  src/ui_v2/companion.cpp
+  src/ui_v2/risk_tier.cpp
+  src/ui_v2/permissions_log.cpp
+  src/ui_v2/chrome.cpp
+  src/ui_v2/ui_core.cpp
+  src/ui_v2/screens/vtable_registry.cpp
+  src/ui_v2/screens/boot.cpp
+  src/ui_v2/screens/sync.cpp
+  src/ui_v2/screens/home.cpp
+  src/ui_v2/screens/approval.cpp
+  src/ui_v2/screens/transfer.cpp
+  src/ui_v2/screens/stats.cpp
+  src/ui_v2/screens/usage.cpp
+  src/ui_v2/screens/permissions.cpp
+  src/ui_v2/screens/info.cpp
+  src/ui_v2/screens/pet.cpp
+  src/ui_v2/screens/buddy_mode.cpp
+  src/ui_v2/screens/character_picker.cpp
+  src/ui_v2/screens/settings.cpp
+  src/ui_v2/screens/reset.cpp
+  src/ui_v2/screens/system_menu.cpp
+  src/ui_v2/screens/dock_clock.cpp
+  src/ui_v2/screens/demo.cpp
+)
+
+# -----------------------------------------------------------------------------
+# Wire V2 into the main firmware target. The BUDDY_UI_V2 compile definition
+# flips the rendering/input path inside claude_buddy_pico.cpp from V1 (inlined
+# screens) to V2 (ui_v2::core::tick_40ms + BuddyInputs/Outputs seam). V1 code
+# remains present, bracketed by #if !BUDDY_UI_V2, so this flag can be toggled
+# off to produce the exact previous firmware if we ever need to bisect.
+# -----------------------------------------------------------------------------
+target_sources(claude_buddy_pico PRIVATE ${UI_V2_SOURCES})
+target_compile_definitions(claude_buddy_pico PRIVATE BUDDY_UI_V2=1)
+
+add_executable(
+  claude_buddy_pico_v2_smoke
+  src/ui_v2_smoke.cpp
+  src/buddy.cpp
+  src/buddies/axolotl.cpp
+  src/buddies/blob.cpp
+  src/buddies/cactus.cpp
+  src/buddies/capybara.cpp
+  src/buddies/cat.cpp
+  src/buddies/chonk.cpp
+  src/buddies/dragon.cpp
+  src/buddies/duck.cpp
+  src/buddies/ghost.cpp
+  src/buddies/goose.cpp
+  src/buddies/mushroom.cpp
+  src/buddies/octopus.cpp
+  src/buddies/owl.cpp
+  src/buddies/penguin.cpp
+  src/buddies/rabbit.cpp
+  src/buddies/robot.cpp
+  src/buddies/snail.cpp
+  src/buddies/turtle.cpp
+  ${UI_V2_SOURCES}
+)
+
+target_include_directories(
+  claude_buddy_pico_v2_smoke
+  PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/src
+)
+
+target_compile_definitions(
+  claude_buddy_pico_v2_smoke
+  PRIVATE
+  BUDDY_UI_V2=1
+)
+
+target_link_libraries(
+  claude_buddy_pico_v2_smoke
+  pico_stdlib
+  pico_cyw43_arch_none
+  hardware_adc
+  hardware_dma
+  hardware_pwm
+  hardware_spi
+  button
+  pico_display_28
+  pico_graphics
+  rgbled
+  st7789
+)
+
+pico_enable_stdio_usb(claude_buddy_pico_v2_smoke 1)
+pico_enable_stdio_uart(claude_buddy_pico_v2_smoke 0)
+pico_add_extra_outputs(claude_buddy_pico_v2_smoke)
+
 add_executable(
   claude_buddy_ble_smoke
   src/claude_buddy_ble_smoke.cpp
