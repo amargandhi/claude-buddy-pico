@@ -13,17 +13,19 @@ The CAD is in `.step` so it can be edited and remixed.
 
 ---
 
-## Hardware choices
+## Why this exists
 
-This build adapts the upstream Hardware Buddy concept to the Raspberry Pi Pico 2 W and Pimoroni Display Pack 2.8. The Display Pack gives a 320×240 panel plus four front buttons in a compact footprint, and the optional LiPo SHIM adds portable operation without changing the firmware target.
+Felix Rieseberg's Hardware Buddy looked like a good side project when I'd run out of Claude usage and was waiting for the next 5-hour block to start again. Cambridge helps here: Raspberry Pi has a shop I can wander into at lunch, so getting the parts was easy. The catch was that Felix's original build was for different hardware, which meant I then had to port the whole thing to the Pico 2 W.
 
-The case is designed around the portable stack, but the same firmware also runs as a minimum USB-powered build with just the Pico 2 W and Display Pack.
+This ended up being a relatively low-cost build. The Display Pack 2.8 felt like the best screen for the size and money. E-ink was tempting. A bigger panel was tempting too. This one felt like the right compromise for something that can sit on top of a Mac mini, or be picked up and taken to the kitchen while the agents are coding and you're doing something else around the house.
+
+The case is designed around the portable stack, but the same firmware also runs as a simpler USB-powered build with just the Pico 2 W and Display Pack.
 
 ---
 
 ## Two builds, same firmware
 
-The minimum build is a **Pico 2 W and a Display Pack**. That's it. Plug it into USB, flash the firmware, pair with Claude Desktop. If you're happy with it tethered to a USB cable on your desk, stop here — you have a working buddy.
+The main thing you need is a **Pico 2 W and a Display Pack**. That's the minimum build. Plug it into USB, flash the firmware, pair with Claude Desktop, and leave it on your desk. If you only want a tethered buddy, stop there.
 
 The portable build adds the **LiPo SHIM and a battery** so you can carry it around. The case is designed around the portable build — the rear panel has a battery cavity and the screw posts assume the SHIM stack height — but a tethered minimum build will run the same firmware identically.
 
@@ -41,9 +43,9 @@ Everything below describes the portable build. If you're doing the minimum build
 | 1 | Pimoroni Pico Display Pack 2.8 | `PIM715` | 320×240 IPS, four buttons, RGB LED. |
 | 1 | Pimoroni LiPo SHIM for Pico | `PIM557` | Portable build only. |
 | 1 | LiPo battery, 2000 mAh, 3.7 V, JST-PH | PKCELL LP803860 or similar | Portable build only. Any 3.7 V LiPo with a JST-PH plug in roughly that footprint will fit the cavity. |
-| 1 | USB-micro cable, **or** USB-C cable + USB-micro-to-USB-C adapter | generic | The case window only fits a thin micro plug or the adapter — see note below. |
+| 1 | USB-micro cable, **or** USB-C cable + USB-micro-to-USB-C adapter | generic | The case really wants a thin micro plug or a compact adapter — see note below. |
 
-**About the USB connector.** The Pico is USB-micro. The case has a cutout that's larger than a bare micro plug and also fits small USB-micro-to-USB-C adapters. A slim USB-micro cable fits directly. If your micro cable has a chunky overmoulded plug, use a compact adapter.
+**About the USB connector.** The Pico is USB-micro. The case works with a thin USB-micro cable. If your cable has a chunky overmoulded plug, use a small USB-micro-to-USB-C adapter instead. The left-side cutout is larger specifically so that adapter can fit. I don't know the exact adapter brand I used, but Amazon is full of ones in roughly the same size and most of them should fit.
 
 ### 3D-printed parts (see [CAD/](CAD/))
 
@@ -58,14 +60,14 @@ Six parts. Both `.stl` (slice-ready) and `.step` (parametric — open in Fusion 
 | `Claude_Pico_Left_Side_Button` | 1 | Actuator for the display's `A` / `B` column. |
 | `Claude_Pico_Right_Side_Button` | 1 | Actuator for the display's `X` / `Y` column. |
 
-**Why three separate side buttons.** The display PCB's flex connector eats about 5 mm on one side, so the screen sits off-centre relative to the display PCB. To keep the display centered in the case, the left and right button strips bridge that offset. They take a few clicks to wear in but the tolerance is fine.
+**Why three separate side buttons.** The display PCB's flex connector eats about 5 mm on one side, so the screen sits off-centre relative to the display PCB. An uncentered display would have driven me mad, so I centered the display in the case and let the button geometry absorb the offset instead. The buttons have enough tolerance, but they usually smooth out after a few repeated clicks.
 
 ### Fasteners and consumables
 
 | Qty | Part | Notes |
 |----:|------|-------|
 | 2 | M3 × 12 mm self-tapping screw | Rear panel into main body. |
-| — | Super glue | Bonds the battery clip to the rear panel. Gel cyanoacrylate works well. |
+| — | Super glue | Bonds the battery clip to the rear panel. |
 
 ### Tools
 
@@ -81,7 +83,7 @@ Soldering iron, thin solder, flux. Small Phillips screwdriver. Multimeter is use
 
 ## 2. Print the case
 
-Six parts, all small. The prototype parts were printed in **ABS on a Bambu P1S with default settings**. PLA in any suitable colour should also work; the case has no meaningful thermal duty.
+Six parts, all small. I printed mine in **ABS on a Bambu P1S with default settings** because that was the only orange filament I had around. PLA should also be fine; the case has no real thermal duty.
 
 Orientation:
 
@@ -90,7 +92,7 @@ Orientation:
 - **Battery clip** — flat side down. No supports.
 - **Three buttons** — cap up, stem pointing into the build plate. No supports. Batch all three on the same plate.
 
-If you want to change the geometry, edit the `.step` files. Likely improvement areas are tighter side-button stem tolerances, a deeper USB cutout for a wider range of cables, and an integrated battery retainer instead of glued clips.
+The `.step` files are there so you can edit the actual CAD and improve it. This was a side project over a weekend, not a finished enclosure program. The obvious places to start are the button stems, the USB cutout, and a better battery retainer.
 
 ![3D-printed parts](Photos_web/03_assembly/03_06_printed_parts_layout.jpg)
 
@@ -131,7 +133,7 @@ scripts/configure_firmware.sh
 cmake --build build/pico
 ```
 
-This produces three UF2s. The full one is `build/pico/claude_buddy_pico.uf2` — that's what you want on the device. The other two (`claude_buddy_pico_smoke.uf2` and `claude_buddy_ble_smoke.uf2`) are diagnostic builds; ignore them unless something breaks, then see [Troubleshooting](#7-troubleshooting).
+This produces three UF2s. The full one is `build/pico/claude_buddy_pico.uf2` — that's the one to flash. The other two (`claude_buddy_pico_smoke.uf2` and `claude_buddy_ble_smoke.uf2`) are there for troubleshooting. Skip them unless something breaks.
 
 Flash:
 
@@ -159,11 +161,9 @@ Before you assemble the case, leave the firmware running off battery for 15 minu
 
 ## 5. Assemble the case
 
-Six steps. Order matters and avoids unnecessary rework.
+Boot the firmware into the Pico/display board first. Then do the assembly in this order.
 
-**Boot the firmware into the Pico/display board first** (step 4 above). You don't want to discover a bad solder joint after the case is screwed shut.
-
-### 1. Drop the four side buttons into the main body
+### 1. Place the four side buttons into the main body
 
 From the inside, push each printed button through its slot until the cap protrudes about 1 mm. They're a friction fit. Two on the left for `A` / `B`, two on the right for `X` / `Y`.
 
@@ -177,13 +177,13 @@ The power button is the printed actuator for the LiPo SHIM's side button. Slide 
 
 ### 3. Angle the assembled Pico/display board into the case
 
-Tilt the stack in display-first, then press down — it'll snap fit. The display glass should land flat against the screen window.
+Tilt the stack in display-first, then press down. It should snap fit. The display glass should land flat against the screen window.
 
 ![Display seated in main body](Photos_web/03_assembly/03_11_display_seated_in_main_body.jpg)
 
 ### 4. Push the USB connector through the left-hand cutout
 
-Push the USB-C adapter (or the micro plug) through the cutout on the left. If the adapter doesn't line up cleanly, push the Pico further in or pull it back a touch — the stack has a loose fit, it'll find the right position.
+Push the USB-C adapter (or the micro plug) through the cutout on the left. I usually seat the Pico/display stack nearly all the way down first, then adjust from there. If the connector doesn't line up cleanly, push the Pico in a little more or pull it back up a touch. The fit is loose enough that this is easy.
 
 ![Pico seated, USB port visible](Photos_web/03_assembly/03_12_pico_seated_usb_port.jpg)
 
@@ -195,7 +195,7 @@ The battery clip is glued to the inside of the rear panel (see note below). Slid
 
 ![Battery clipped to rear panel](Photos_web/03_assembly/03_15_battery_clipped_to_rear_panel.jpg)
 
-**About the battery clip.** The prototype uses glued battery clips on the inside of the rear panel. It works, but an integrated retainer in the rear panel would be better; pull requests welcome.
+**About the battery clip.** I was getting tired, so I just glued the clips to the back of the rear case with super glue. It works. An integrated retainer would be better.
 
 ### 6. Two M3 × 12 screws
 
@@ -253,15 +253,15 @@ The BLE smoke test should show `ADVERTISING` and a name field of `Claude Pico`.
 
 ## 8. What to do next
 
-- **Build the minimum version first** if you're unsure — Pico + Display + USB cable. That tells you whether the firmware works on your hardware before you commit to the SHIM solder.
-- **Open the `.step` files** in Fusion / FreeCAD / Onshape. The current case has clear room for iteration around the battery retainer, USB cutout depth, and button stem tolerance.
+- **Build the minimum version first** if you're unsure — Pico 2 W + Display Pack + USB cable. That tells you whether the firmware works on your hardware before you commit to the SHIM solder.
+- **Open the `.step` files** in Fusion / FreeCAD / Onshape if you want to improve the case. The USB cutout, battery retainer, and button stems are the obvious next passes.
 - **Post your build.** Photos and fit notes from different prints, batteries, and cable setups help the next builder.
 
 ---
 
 ## Credits and licence
 
-- Upstream BLE Hardware Buddy protocol: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy).
+- Upstream BLE Hardware Buddy protocol: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). The original project is Felix Rieseberg's.
 - Pico firmware port, case design, build notes: this repo.
 - Mascot: Clawd, Anthropic.
 - Licence: see [../LICENSE](../LICENSE).
