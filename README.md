@@ -7,7 +7,7 @@ A BLE desktop buddy for [Claude Desktop](https://claude.ai/download), ported fro
 <p align="center">
   <img src="Physical%20Build/Photos_web/03_assembly/03_19_assembled_powered_on_pet_screen.jpg" alt="Claude Buddy Pico powered on in the printed case" width="49%">
   &nbsp;
-  <img src="Physical%20Build/Photos_web/03_assembly/03_07_all_parts_hero.jpg" alt="All parts laid out: Pico 2 W, Pimoroni Display Pack 2.8, LiPo SHIM, 2000 mAh battery, 3D-printed Clawd case, M3 screws" width="49%">
+  <img src="docs/assets/buddy_demo.gif" alt="Claude Buddy Pico reacting to Claude Desktop activity" width="49%">
 </p>
 
 Upstream: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). Original author: [Felix Rieseberg](https://github.com/anthropics/claude-desktop-buddy/commits?author=felixrieseberg).
