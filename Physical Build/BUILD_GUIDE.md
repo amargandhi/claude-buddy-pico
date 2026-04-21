@@ -217,7 +217,7 @@ Plug in USB, or press the SHIM power button if the battery is charged.
 
 ![Powered on — Claude home](Photos_web/03_assembly/03_20_assembled_claude_linked.jpg)
 
-`A` / `B` step through screens, `X` / `Y` jump to Pet and Home. `Hold A` opens settings, `Hold Y` puts the buddy to sleep. Full reference: [../README.md#button-map](../README.md).
+`A` / `B` step through screens, `X` / `Y` jump to Pet and Home. `Hold A` opens settings, `Hold Y` puts the buddy to sleep. Full reference: [../README.md#controls](../README.md).
 
 ---
 
