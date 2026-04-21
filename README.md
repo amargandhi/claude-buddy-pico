@@ -1,24 +1,26 @@
 # Claude Buddy Pico
 
-A BLE desktop buddy for [Claude Desktop](https://claude.ai/download), ported from Felix Rieseberg's M5Stick Hardware Buddy to the Raspberry Pi Pico 2 W. Community port — not produced or endorsed by Anthropic.
+A fun, playful Claude Code mascot brought to life with a 3D-printed case by porting Felix Rieseberg's original Claude Desktop buddy from the M5 ESP32 hardware to a custom Raspberry Pi Pico build with a bigger 2.8" display. Claude Pico sits next to your Mac, approves tool calls for [Claude Desktop](https://claude.ai/download) over Bluetooth, and reacts to what Claude is doing with a face that feels alive. One button approves, another denies, and the built-in rechargeable battery lets you take it around the office or house to keep an eye on things while you get on with your day.
 
-![Claude Buddy Pico on a Mac mini, asking the user to approve a SHELL COMMAND tool call](docs/assets/buddy_on_mac_mini_approval.jpg)
+![Claude Buddy Pico V2 UI demo](docs/assets/buddy_demo.gif)
+
+Unofficial community port. Not produced or endorsed by Anthropic. Attribution in [NOTICE](NOTICE).
 
 <p align="center">
-  <img src="docs/assets/buddy_demo.gif" alt="Claude Buddy Pico reacting to Claude Desktop activity" width="49%">
+  <img src="Physical%20Build/Photos_web/03_assembly/03_19_assembled_powered_on_pet_screen.jpg" alt="Claude Buddy Pico powered on in the printed case" width="49%">
   &nbsp;
   <img src="Physical%20Build/Photos_web/03_assembly/03_07_all_parts_hero.jpg" alt="All parts laid out: Pico 2 W, Pimoroni Display Pack 2.8, LiPo SHIM, 2000 mAh battery, 3D-printed Clawd case, M3 screws" width="49%">
 </p>
 
-Upstream: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). Original author: [Felix Rieseberg](https://github.com/anthropics/claude-desktop-buddy/commits?author=felixrieseberg). This Pico port: [@amargandhi](https://x.com/amargandhi).
+Upstream: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). Original author: [Felix Rieseberg](https://github.com/anthropics/claude-desktop-buddy/commits?author=felixrieseberg).
 
 ## What it is
 
 - Raspberry Pi Pico 2 W + Pimoroni Display Pack 2.8 + optional LiPo SHIM and 2000 mAh battery.
 - Pairs with Claude Desktop over Bluetooth Low Energy using the Hardware Buddy protocol.
-- Runs tethered on USB, or untethered with the battery — I take mine into the kitchen when I'm cooking and the agents are coding.
+- Runs tethered on USB, or untethered with the optional battery.
 - 3D-printed case in the shape of Clawd. CAD in both `.step` (editable) and `.stl` (printable).
-- Weekend side project, MIT licensed, improve it and send a PR.
+- MIT licensed; improvements and fixes are welcome.
 
 ## Pick a path
 
@@ -28,7 +30,6 @@ Upstream: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude
 | Print the case | [Physical Build/CAD/](Physical%20Build/CAD) — GitHub renders `.stl` inline |
 | Flash the firmware | [docs/software-setup.md](docs/software-setup.md) |
 | Understand what changed from upstream | [docs/feature-matrix.md](docs/feature-matrix.md) |
-| Read the bringup story | [docs/bring-up-journal.md](docs/bring-up-journal.md) |
 
 ## What changed from upstream
 
@@ -57,14 +58,14 @@ Full screen-by-screen map in [`docs/user-guide.md`](docs/user-guide.md).
 
 - **GIF character packs not implemented.** The transfer wire protocol works and `text` manifests render on-device; porting the upstream GIF renderer to the Pico is future work.
 - **Battery percent is estimated from VSYS voltage.** No current-sense path on this build, so it's a voltage-curve approximation, not coulomb counting.
-- **Case is v1.** Weekend work. Obvious things to improve: a proper integrated battery retainer instead of glued clips, a deeper USB cutout, tighter button-stem tolerance. The `.step` files are in the repo; please fork the case.
+- **Case is v1.** Obvious things to improve: a proper integrated battery retainer instead of glued clips, a deeper USB cutout, tighter button-stem tolerance. The `.step` files are in the repo. Fork the case and open a PR — the v2 list is in the build guide.
 - **Hardware Buddy feature gating.** If `Developer → Open Hardware Buddy…` is missing, you're on a Claude Desktop build that doesn't expose the feature yet — host-side, not firmware.
 
 ## Firmware — two paths
 
 There are two ways to build the main firmware from the same `claude_buddy_pico` target. Both speak the same BLE protocol and pair with Claude Desktop the same way. They differ only in the on-device UI.
 
-- **Main path — V2 with buddy animations (default).** Face expressions, animated pet, dock clock, tool-aware approval screens, permissions log. This is what the GIF at the top shows. Built with `BUDDY_UI_V2=1`, which is on by default.
+- **Main path — V2 with buddy animations (default).** Face expressions, animated pet, dock clock, approval screens, permissions log. Built with `BUDDY_UI_V2=1`, which is on by default.
 - **Basic path — V1 monolith (fallback).** The original single-file UI from early bringup. Same BLE stack, simpler screens, no animations. Opt in with `-DBUDDY_UI_V2=OFF` at configure time. Useful if you're debugging the BLE layer and want the UI out of the way.
 
 ## Build
@@ -117,7 +118,7 @@ If Homebrew's embedded toolchain install fails on your machine, `scripts/extract
 - `src/` — active firmware targets and character renderer
 - `src/ui_v2/` — V2 UI engine, screens, palette, face system, transitions
 - `src/_legacy/` — archived bringup scaffold, not part of the current build
-- `docs/` — protocol notes, feature matrix, bringup journal, limitations, user guide
+- `docs/` — protocol notes, feature matrix, limitations, and user guide
 - `Physical Build/` — CAD, printable case, and the hardware build guide
 - `scripts/` — bootstrap, dependency, and configure helpers
 - `third_party/` — vendor SDK clones
@@ -126,12 +127,11 @@ If Homebrew's embedded toolchain install fails on your machine, `scripts/extract
 ## What to do next
 
 - **Build the minimum version first** — Pico 2 W + Display Pack + USB cable. That proves the firmware works on your hardware before you commit to the SHIM solder.
-- **Open the `.step` files** in Fusion / FreeCAD / Onshape. Fork the case; the v2 list is in the build guide.
-- **Read [`docs/bring-up-journal.md`](docs/bring-up-journal.md)** if you want to port this to a different Pico-family board or a different display.
+- **Open the `.step` files** in Fusion / FreeCAD / Onshape. Fork the case and open a PR — the v2 list is in the build guide.
 
 ## Credits
 
-The Hardware Buddy BLE protocol and the original M5Stick firmware are the work of Anthropic and are published at [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). This repo is an unofficial community port and is not produced, endorsed, or supported by Anthropic. See [NOTICE](NOTICE) for attribution details.
+The Hardware Buddy BLE protocol and the original M5Stick firmware are the work of Anthropic and are published at [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy). Felix Rieseberg's original implementation is the foundation for this port. See [NOTICE](NOTICE) for attribution details.
 
 ## License
 
